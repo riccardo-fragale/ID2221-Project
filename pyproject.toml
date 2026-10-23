@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools==75.8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "amazon-recommender"
+version = "0.1.0"
+description = "Distributed explicit-feedback ALS experiments on Amazon Reviews 2023"
+requires-python = "==3.11.*"
+dependencies = ["pyspark==3.5.6", "numpy==1.26.4"]
+
+[project.scripts]
+amazon-recommender = "amazon_recommender.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
