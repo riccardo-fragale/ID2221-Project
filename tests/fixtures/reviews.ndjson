@@ -1,0 +1,4 @@
+{"user_id":"fixture-user-1","parent_asin":"fixture-item-1","rating":5.0,"timestamp":1577836800000}
+{"user_id":"fixture-user-1","parent_asin":"fixture-item-2","rating":3.0,"timestamp":1609459200000}
+{"user_id":"fixture-user-2","parent_asin":"fixture-item-1","rating":4.0,"timestamp":1640995200000}
+{"user_id":"fixture-user-2","parent_asin":"fixture-item-3","rating":2.0,"timestamp":1672531200000}
