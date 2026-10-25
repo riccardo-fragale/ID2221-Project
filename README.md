@@ -10,8 +10,8 @@ validated experiment settings, input/output schemas, run configuration/input
 snapshots, a non-starting environment check, an explicit Spark-session factory,
 a MongoDB Compose setup, and foundation tests. ETL, sampling, the split, the four systems
 (popularity, bias-only, ALS, bias+ALS), evaluation and the scalability benchmark runner are
-implemented; the quality results are below. The full scalability benchmark has not been run yet
-(see "Scalability benchmark"). MongoDB publication and the dashboard are still to be implemented.
+implemented; the quality and scalability results are below. MongoDB publication and the
+dashboard are still to be implemented.
 
 ## ETL stage
 
@@ -264,7 +264,7 @@ Bias fitting on this split stopped at the 10-pass limit without converging (`con
 last change 2.3e-4), which the approved rule allows. The test window spans about 2.5 years after
 the refit cutoff. These baseline test evaluations were run on 2026-10-25, after W was frozen and
 before any decision on evaluation horizons or ALS, so every later protocol change is made after
-this look at the baseline test results. ALS has not been run yet.
+this look at the baseline test results. ALS had not been run at that point.
 
 ## Test reporting plan (frozen 2026-10-25, before any ALS result)
 
@@ -406,11 +406,11 @@ development grid; since the development selection was within noise, this shows t
 stable, not that the chosen settings are optimal. Explicit rating models do not beat recent
 popularity at top-N on this data, and they do not beat biases at rating prediction.
 
-## Scalability benchmark (P6, implemented, full run pending)
+## Scalability benchmark (P6)
 
-Status on 2026-10-25: the runner, the event-log parser and the report are implemented and tested
-(`make check-spark`); only a 25% probe has been run. **The 25/50/100% benchmark is still to be
-run**, so there are no scalability results yet.
+The runner, the event-log parser and the report are implemented and tested (`make check-spark`).
+The 25/50/100% benchmark `fixed-resource-v1` ran on 2026-10-25; its results are at the end of this
+section.
 
 Contract approved by the user on 2026-10-25:
 - Nested user samples 0.25 / 0.5 / 1 with seed 2221. All three are split with the cutoffs of the
@@ -455,8 +455,8 @@ stage, linked by application id, gives:
   slowest task takes at least 1 s;
 - the sampled peak JVM heap.
 
-Run it with nothing else heavy on the host (no other Spark job, no browser load). It takes an
-estimated 25-40 min and about 3 GB:
+Run it with nothing else heavy on the host (no other Spark job, no browser load). Before the run it
+was estimated at 25-40 min and about 3 GB:
 - **Time basis:** split and train scale about linearly in rows (×4-5 from the probe below). The
   exact ALS and bias+ALS top-20 scale with users × items, about 12.5× (536,945/114,908 ×
   153,860/57,407), so about 5.5 min each at 100%.
@@ -518,6 +518,76 @@ Other probe observations:
 - **Host load:** the load was already 3.4 before the probe (desktop applications); this is the only
   statement about external load. The load recorded before each later stage includes the previous
   stage's own `local[8]` work, because the 1-minute average decays slowly. It rose from 3.4 to 7.9.
+
+Results of `fixed-resource-v1` (2026-10-25):
+- **Run:** one run per fraction; commit e13b455 with a dirty tree (uncommitted P7 files and a
+  test-only Makefile change), identified by hash in `manifest.json`.
+- **Status:** 30 of 30 stages completed, with identical Spark resources; MongoDB is not measured.
+  The whole run took 26 min 45 s of wall time.
+- **Host load:** 1.0 before the start.
+
+Work seconds exclude Spark start-up (1.6-2.0 s per stage) and verification counts. The ratios are
+relative to 25%.
+
+| Stage | 25% | 50% | 100% | Size ratio 50% / 100% | Time ratio 50% / 100% |
+| --- | --- | --- | --- | --- | --- |
+| sample (input constant: full ETL scan) | 9.7 | 12.4 | 6.6 (no copy) | output 2.0 / - | 1.28 / - |
+| split | 34.3 | 56.0 | 120.6 | sample rows 2.0 / 4.0 | 1.63 / 3.51 |
+| train popularity | 4.4 | 5.1 | 6.0 | train rows 2.3 / 4.9 | 1.17 / 1.37 |
+| train bias | 13.9 | 19.1 | 29.5 | 2.3 / 4.9 | 1.37 / 2.12 |
+| train ALS | 22.6 | 38.7 | 72.3 | 2.3 / 4.9 | 1.71 / 3.20 |
+| train bias+ALS | 34.0 | 53.3 | 97.4 | 2.3 / 4.9 | 1.56 / 2.86 |
+| top-20 popularity | 5.5 | 10.0 | 13.4 | 2.3 / 4.9 | 1.84 / 2.45 |
+| top-20 bias | 5.9 | 10.1 | 13.8 | 2.3 / 4.9 | 1.71 / 2.35 |
+| exact top-20 ALS | 27.8 | 70.7 | 277.8 | users x items 3.7 / 12.5 | 2.54 / 9.99 |
+| exact top-20 bias+ALS | 27.6 | 74.5 | 335.2 | 3.7 / 12.5 | 2.70 / 12.16 |
+| total work | 185.6 | 349.9 | 972.6 | | 1.89 / 5.24 |
+
+Retention per scale:
+
+| Fraction | Sample users / rows | Train rows after k-core (retained) | k-core passes | Train users / items |
+| --- | --- | --- | --- | --- |
+| 25% | 1,624,497 / 4,288,107 | 1,204,219 (35.1%) | 13 | 114,908 / 57,407 |
+| 50% | 3,251,353 / 8,571,510 | 2,719,619 (39.7%) | 10 | 253,361 / 97,040 |
+| 100% | 6,503,429 / 17,158,519 | 5,895,362 (42.9%) | 13 | 536,945 / 153,860 |
+
+Findings, from `report.json` and the event logs:
+- **Exact ALS ranking dominates.** At 100% the exact ALS and bias+ALS top-20 take 613 s of 973 s
+  of work (63%).
+  - Their time follows users x items (every user is scored against the whole catalogue), not the
+    training rows: x10.0 and x12.2 for x12.5 users x items, against x4.9 rows. Retention adds to
+    this, since k-core keeps a larger share of rows and items as the sample grows.
+  - This is the cost of the approved exact ranking (P0.4 change).
+- **The split is about linear in its input:** x3.5 for x4.0 sample rows.
+  - k-core is 78% of it at 100% (94 s).
+  - The number of passes is a confounder: 13, 10 and 13 passes, at about 1.8, 4.0 and 7.2 s per
+    pass. The 50% split therefore did less k-core work per row than the other two.
+- **Training grows less than linearly in rows** (exponents 0.2-0.7). This is consistent with
+  fixed per-job costs (ALS iterations, bias passes, checkpoints) weighing more at small inputs, but
+  nothing isolates that overhead. ALS is the steepest (x3.2 for x4.9 rows).
+- **The sample is not input scaling.** It reads all 17.2 M ETL rows at every fraction, and at 100%
+  it copies nothing.
+- **No memory pressure:** no spill in any stage, and GC at most 2.7% of executor time. Shuffle
+  writes reach 12.9 GB (bias+ALS training at 100%).
+  - The peak heap, 5.4 GB of 12 GB, was sampled during the popularity top-20 at 100%.
+  - A sample includes garbage not yet collected, so it is not the working set of a stage: it does
+    not mean popularity is the stage that needs the most memory.
+- **Parallelism is bounded by partitions.**
+  - Most of the split's Spark-stage time (153 of 177 s at 100%) is in stages with 9 tasks. On 8
+    cores they need a second wave of a single task.
+  - The likely cause, not verified, is the 9 input partitions carried through the k-core
+    checkpoints. Repartitioning to a multiple of 8 might help; it was not tested.
+  - The longest stages have skew 1.8-2.6. The largest skew over 1-s stages (27.1) is again the
+    projection counts, a 1.0 s stage.
+- **Host load** rose to 8-9 during the run, from our own `local[8]` work.
+
+These are single-run, warm-cache measurements on one 16-core host in local mode. They show how
+stage time grows with input under fixed resources, not distributed speedup. With three points and
+one run, the ratios carry run-to-run noise that is not measured. As a rough indication, the 25%
+probe, run at a higher host load (3.4), and the 25% point agree within 1.4 s per stage, except
+top-20 bias (10.0 s against 5.9 s, about 70%). Short stages (under 15 s) can therefore vary a lot
+between runs, and their ratios are the least reliable. The long stages (split, ALS training and the
+exact top-20) are the informative ones.
 
 ## First run on the real category
 
