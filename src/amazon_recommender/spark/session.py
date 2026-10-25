@@ -36,3 +36,14 @@ def create_spark_session(config: ProjectConfig, *, app_name: str = "amazon-recom
     spark = builder.getOrCreate()
     spark.sparkContext.setCheckpointDir(str(checkpoints))
     return spark
+
+
+def describe_resources(spark, config: ProjectConfig) -> dict:
+    """The resources a stage ran with, for its stage.json; timings are only comparable under equal resources."""
+    return {
+        "master": config.spark.master,
+        "driver_memory": config.spark.driver_memory,
+        "shuffle_partitions": config.spark.shuffle_partitions,
+        "spark_version": spark.version,
+        "java_version": inspect_environment()["java_version"],
+    }
