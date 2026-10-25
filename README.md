@@ -9,9 +9,114 @@ The development foundation provides an installed Python package and lockfile,
 validated experiment settings, input/output schemas, run configuration/input
 snapshots, a non-starting environment check, an explicit Spark-session factory,
 a MongoDB Compose setup, and foundation tests. Data ingestion, models,
-metrics, publication, and the dashboard are still to be implemented. No quality
+metrics, publication, and the dashboard are still to be implemented. The ETL stage
+described below is the first implemented stage. No quality
 or scalability results have been measured. Spark has not been started for this
 increment, so the Spark-session factory is not yet runtime verified.
+
+## ETL stage
+
+`amazon-recommender etl --config configs/local.toml --run storage/runs/<run-id>`
+starts Spark and processes the inputs recorded by `init-run`. It refuses to run
+if the configuration digest differs from the run snapshot, if an input's size
+changed (checksums are not recomputed), or if `etl/` already exists.
+
+- Reviews are read with the four-column schema; malformed JSON lines and rows with
+  missing user/item/rating/timestamp, rating outside [1,5], or a timestamp outside
+  1990-2030 (Unix milliseconds; seconds are rejected) are dropped and counted by reason.
+- Per original (user, item) pair the latest review is kept; ties on timestamp keep the
+  highest rating. Output: `<run>/etl/interactions/year=YYYY/` (UTC year, Parquet).
+- Metadata is reduced to one title per `parent_asin` (blank titles count as missing, so the
+  item falls back to its ID): `<run>/etl/metadata/`.
+- `<run>/etl/stage.json` records read/rejected/duplicate/output counts, users, items,
+  year range, items without a title, the Spark resources used, and wall-clock seconds per
+  step (around completed Spark actions). The stage is written to `etl.partial/` and
+  renamed when complete, so an existing `etl/` is a finished stage.
+- `malformed_record` also counts lines whose fields have the wrong JSON type (for example
+  a rating given as a string), since Spark cannot parse them with the schema.
+- Identifiers are stored as read, without trimming.
+- Dense integer mappings are not created here: the approved protocol derives them from
+  the training window after k-core filtering (split stage).
+
+## Sampling stage
+
+`amazon-recommender sample --config <config> --run storage/runs/<run-id> [--user-fraction F]`
+requires a completed ETL stage and starts Spark. It keeps a user when
+`pmod(xxhash64(cast(seed as bigint), user_id), 2^32) / 2^32 < user_fraction`, with the user's
+full history. The choice depends only on the user ID and seed: the same seed gives the same
+users on the same data, no shuffle is needed to select, and with one seed a smaller fraction
+keeps a subset of a larger one's users (nested 25/50/100% cohorts). The fraction is approximate
+(about `user_fraction` of users, not exactly), and a different seed gives a different sample.
+
+One ETL serves several samples: each goes to `<run>/samples/fraction-<F>-seed-<seed>/`, and
+the sampling configuration (with `--user-fraction` overriding `experiment.user_fraction`) may
+differ from the run snapshot. Its `stage.json` records that configuration and digest, the
+SHA-256 of the consumed `etl/stage.json`, the method, the input identities, user and
+interaction counts before/after, the achieved fraction, resources, and timings. With
+fraction 1 nothing is copied and `stage.json` points at `etl/interactions`. Later stages must
+read the paths listed in `outputs` (relative to the run directory). Sampling happens after
+ETL, so ingestion is timed on the full input only; cohort timings start at the sample.
+Sampling happens before the split and k-core, as in the proposal. The sample is a
+development choice; results from different fractions are exploratory and do not show
+model improvements by themselves. Chronological split, k-core, and the integer mappings are next.
+
+`make check` skips the Spark tests; `make check-spark` runs the ETL and sampling ones and needs Java 17.
+They passed on 2026-10-25 on synthetic data on the Linux machine (Ubuntu 24.04), which uses
+OpenJDK 17.0.20.1 selected through `JAVA_HOME`.
+
+## First run on the real category
+
+`configs/real.toml` is a per-machine profile and is gitignored. Create it from the committed
+local profile and adjust the resources to your host, then validate it:
+
+```bash
+cp configs/local.toml configs/real.toml
+# Edit [spark] for your machine and set experiment.user_fraction = 0.2.
+.venv/bin/amazon-recommender validate-config --config configs/real.toml
+```
+
+In local mode the driver JVM does all the work. As a starting point, use about half the logical
+cores for `local[N]` (`nproc`), about 40% of RAM for `driver_memory` (`free -g`), and 4-8 times N
+shuffle partitions. These are rules of thumb, not measured minimums.
+
+The first real run used, on a Linux host with 16 cores and 30 GB RAM (approved by the user on
+2026-10-25): `master = "local[8]"`, `driver_memory = "12g"`, `shuffle_partitions = 64`,
+`event_log_enabled = true`, `user_fraction = 0.2`, with the other values as in `configs/local.toml`.
+Expected disk use is ~14 GB at peak and ~10.5 GB after the run, mostly the decompressed inputs.
+Each run's `run.json` and `stage.json` files keep the full configuration used. Timings are only
+comparable between runs on the same machine with the same resources, so run all scaling
+experiments on one host.
+
+Gzip files cannot be split, so each raw scan of a `.gz` runs as a single task. Decompress
+the official files once and run on the `.jsonl` copies; record the `.gz` checksums too:
+
+```bash
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64   # or an SDKMAN Temurin 17
+export PATH="$JAVA_HOME/bin:$PATH"
+make doctor && make check && make check-spark
+sha256sum data/raw/*.jsonl.gz > data/raw/SHA256SUMS.gz.txt
+zcat data/raw/Movies_and_TV.jsonl.gz > data/raw/Movies_and_TV.jsonl
+zcat data/raw/meta_Movies_and_TV.jsonl.gz > data/raw/meta_Movies_and_TV.jsonl
+.venv/bin/amazon-recommender init-run --config configs/real.toml \
+  --reviews data/raw/Movies_and_TV.jsonl --metadata data/raw/meta_Movies_and_TV.jsonl
+.venv/bin/amazon-recommender etl --config configs/real.toml --run storage/runs/<run-id>
+# Check etl/stage.json before sampling.
+.venv/bin/amazon-recommender sample --config configs/real.toml --run storage/runs/<run-id>
+```
+
+Measured on 2026-10-25 (run `20261025T093611Z-2b4b605ead0f`, `configs/real.toml`, Java 17.0.20.1):
+ETL read 17,328,314 reviews with no rejections, removed 169,795 duplicate (user, item) pairs,
+and kept 17,158,519 interactions from 6,503,429 users and 747,764 items, 1997-2023, in 27 yearly
+partitions (756 MB of Parquet). It took 37.5 s in total, including 7.3 s of verification counts.
+This is a warm-cache measurement: `zcat` had just written the input, so the 8.4 GB were read from the
+page cache (about 1.2 GB/s per scan), not from disk. Scaling runs must state cold or warm cache
+(cold: `sync; echo 3 | sudo tee /proc/sys/vm/drop_caches` first) and report processing time with and
+without `verification_counts`. All reviewed items have a metadata row (checked
+separately; later runs record it in `interaction_items_without_metadata_row`), but 313,873 have no title: the raw metadata has 313,988 records without `title` and 14 blank ones,
+so the dashboard must fall back to the item ID. The 20% development sample (`sample`, seed 2221)
+kept 1,300,010 users (achieved fraction 0.19990) and 3,431,067 interactions (20.0%) in 12.8 s,
+also warm cache, in `samples/fraction-0.2-seed-2221/` (143 MB). These figures come from one run on one machine;
+they are not a scalability result.
 
 ## Environment
 
@@ -59,7 +164,7 @@ make prepare-fixture   # Create a run manifest for small synthetic inputs
 ```
 
 `make doctor` also inspects Java, so first set `JAVA_HOME` to Java 17 as above.
-All current CLI commands operate without starting Spark or MongoDB. Use
+Only `etl` and `sample` start Spark; no command contacts MongoDB. Use
 `.venv/bin/amazon-recommender --help` to list them.
 
 Edit `configs/local.toml` for a development run. Its `[experiment]` section
@@ -73,7 +178,7 @@ when exercising very small synthetic data later.
 The `[model]` section stores ALS/bias settings and bounded approximate retrieval
 settings. Initial shortlist size 200 and cap 1000 are editable development
 starting points, not measured recommendations or approved full-data budgets.
-Sampling, splitting, training, and retrieval themselves are not implemented yet.
+Splitting, training, and retrieval themselves are not implemented yet.
 
 To prepare a run for your own existing local review/metadata files:
 
