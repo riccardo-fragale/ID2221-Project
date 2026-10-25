@@ -32,6 +32,9 @@ def create_spark_session(config: ProjectConfig, *, app_name: str = "amazon-recom
         .config("spark.sql.warehouse.dir", (root / "warehouse").as_uri())
         .config("spark.eventLog.enabled", str(config.spark.event_log_enabled).lower())
         .config("spark.eventLog.dir", event_logs.as_uri())
+        # Peak JVM/execution memory per stage in the event log, for the scalability evidence (P6).
+        .config("spark.eventLog.logStageExecutorMetrics", "true")
+        .config("spark.eventLog.compress", "false")  # plain JSON lines, read by eventlog.py
     )
     spark = builder.getOrCreate()
     spark.sparkContext.setCheckpointDir(str(checkpoints))
@@ -46,4 +49,6 @@ def describe_resources(spark, config: ProjectConfig) -> dict:
         "shuffle_partitions": config.spark.shuffle_partitions,
         "spark_version": spark.version,
         "java_version": inspect_environment()["java_version"],
+        # Names the event log file (<storage>/spark-events/<id>); differs per session, not a resource.
+        "application_id": spark.sparkContext.applicationId,
     }

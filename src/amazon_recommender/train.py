@@ -56,7 +56,8 @@ def run_train(config: ProjectConfig, run_directory: Path, sample: str, split: st
 
     timings = {}
     started = time.monotonic()
-    spark = create_spark_session(config, app_name=f"amazon-recommender-train-{model_name}")
+    with timed(timings, "spark_start"):  # JVM launch and session; not data work
+        spark = create_spark_session(config, app_name=f"amazon-recommender-train-{model_name}")
     # Fitting checkpoints its tables; remove this session's checkpoint directory at the end.
     checkpoints = Path(urlparse(spark.sparkContext.getCheckpointDir()).path)
     try:

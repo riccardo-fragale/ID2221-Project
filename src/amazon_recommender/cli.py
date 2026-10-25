@@ -1,5 +1,5 @@
-"""Local pipeline commands. Only etl, sample, split, train, evaluate, select-popularity-window and select-grid
-start Spark; none contacts MongoDB."""
+"""Local pipeline commands. Only etl, sample, split, train, recommend, evaluate, select-popularity-window,
+select-grid and benchmark start Spark; none contacts MongoDB."""
 
 import argparse
 from dataclasses import asdict, replace
@@ -49,6 +49,12 @@ def main(argv: list[str] | None = None) -> int:
     train.add_argument("--rank", type=int, help="Override model.rank (ALS)")
     train.add_argument("--regularization", type=float, help="Override model.regularization (ALS)")
     train.add_argument("--iterations", type=int, help="Override model.iterations (ALS)")
+    recommend = subcommands.add_parser("recommend", help="Top-k lists for all training users of a model; starts Spark")
+    recommend.add_argument("--config", type=Path, required=True, help="Spark resources and model.recommendation_count")
+    recommend.add_argument("--run", type=Path, required=True)
+    recommend.add_argument("--sample", required=True)
+    recommend.add_argument("--split", required=True)
+    recommend.add_argument("--model-label", required=True, help="Directory name under <split>/models/")
     evaluate = subcommands.add_parser("evaluate", help="Metrics of a trained model on a held-out window; starts Spark")
     evaluate.add_argument("--config", type=Path, required=True, help="Spark resources and bootstrap seed")
     evaluate.add_argument("--run", type=Path, required=True)
@@ -72,7 +78,34 @@ def main(argv: list[str] | None = None) -> int:
     grid.add_argument("--sample", required=True)
     grid.add_argument("--split", required=True)
     grid.add_argument("--model", required=True, choices=("als", "bias-als"))
+    benchmark = subcommands.add_parser("benchmark",
+                                       help="Fixed-resource input-scaling benchmark; starts Spark once per stage")
+    benchmark.add_argument("--config", type=Path, required=True, help="Spark resources, identical for every stage")
+    benchmark.add_argument("--run", type=Path, required=True, help="Run directory with a completed ETL stage")
+    benchmark.add_argument("--label", required=True, help="Output name under <run>/benchmarks/")
+    benchmark.add_argument("--reference-split", type=Path, required=True,
+                           help="stage.json of the split whose cutoffs every fraction uses")
+    benchmark.add_argument("--model-stage", type=Path, action="append", required=True,
+                           help="stage.json of a trained model with frozen settings; repeat for each model")
+    benchmark.add_argument("--fractions", type=float, nargs="+", required=True)
+    benchmark.add_argument("--repetitions", type=int, default=1)
+    benchmark.add_argument("--cache", choices=("warm", "cold"), default="warm",
+                           help="Declared page-cache state; the runner never drops caches")
+    benchmark.add_argument("--stage-timeout", type=float, default=3600, help="Seconds before a stage counts as timed out")
+    benchmark.add_argument("--delete-outputs", action="store_true",
+                           help="Delete each fraction's data after measuring it; stage.json files are kept")
+    report = subcommands.add_parser("benchmark-report", help="Scaling tables and figure from a benchmark's saved files")
+    report.add_argument("--benchmark", type=Path, required=True, help="<run>/benchmarks/<label>")
     args = parser.parse_args(argv)
+    if args.command == "benchmark-report":
+        from amazon_recommender.benchmark import run_benchmark_report
+
+        try:
+            print(run_benchmark_report(args.benchmark))
+        except (OSError, ValueError) as exc:
+            print(f"Invalid benchmark: {exc}", file=sys.stderr)
+            return 2
+        return 0
     if args.command == "doctor":
         report = inspect_environment()
         print(json.dumps(report, indent=2))
@@ -113,6 +146,19 @@ def main(argv: list[str] | None = None) -> int:
             if overrides:
                 config = replace(config, model=parse_model({**asdict(config.model), **overrides}))
             print(run_train(config, args.run, args.sample, args.split, args.model) / "stage.json")
+            return 0
+        if args.command == "recommend":
+            from amazon_recommender.recommend import run_recommend
+
+            print(run_recommend(config, args.run, args.sample, args.split, args.model_label) / "stage.json")
+            return 0
+        if args.command == "benchmark":
+            from amazon_recommender.benchmark import run_benchmark
+
+            print(run_benchmark(args.config, args.run, label=args.label, reference_split=args.reference_split,
+                                model_stages=args.model_stage, fractions=args.fractions,
+                                repetitions=args.repetitions, cache=args.cache, stage_timeout=args.stage_timeout,
+                                keep_outputs=not args.delete_outputs) / "manifest.json")
             return 0
         if args.command == "evaluate":
             from amazon_recommender.evaluate import run_evaluate

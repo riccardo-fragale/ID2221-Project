@@ -7,7 +7,7 @@ check:
 	$(PYTHON) -m unittest discover -s tests -v
 
 check-spark:
-	RUN_SPARK_TESTS=1 $(PYTHON) -m unittest tests.test_etl tests.test_sample tests.test_split tests.test_models tests.test_evaluate -v
+	RUN_SPARK_TESTS=1 $(PYTHON) -m unittest tests.test_etl tests.test_sample tests.test_split tests.test_models tests.test_evaluate tests.test_benchmark -v
 
 config:
 	$(CLI) validate-config --config configs/local.toml

@@ -8,11 +8,10 @@ fixed-resource input scaling, MongoDB top-20 serving, and a Streamlit dashboard.
 The development foundation provides an installed Python package and lockfile,
 validated experiment settings, input/output schemas, run configuration/input
 snapshots, a non-starting environment check, an explicit Spark-session factory,
-a MongoDB Compose setup, and foundation tests. ETL, sampling, the split and the
-popularity/bias-only baselines are implemented; ALS, metrics, publication, and the dashboard
-are still to be implemented. No quality
-or scalability results have been measured. Spark has not been started for this
-increment, so the Spark-session factory is not yet runtime verified.
+a MongoDB Compose setup, and foundation tests. ETL, sampling, the split, the four systems
+(popularity, bias-only, ALS, bias+ALS), evaluation and the scalability benchmark runner are
+implemented; the quality results are below. The full scalability benchmark has not been run yet
+(see "Scalability benchmark"). MongoDB publication and the dashboard are still to be implemented.
 
 ## ETL stage
 
@@ -406,6 +405,119 @@ so no ALS trial improved on the biases there either. Test results agree qualitat
 development grid; since the development selection was within noise, this shows the pattern is
 stable, not that the chosen settings are optimal. Explicit rating models do not beat recent
 popularity at top-N on this data, and they do not beat biases at rating prediction.
+
+## Scalability benchmark (P6, implemented, full run pending)
+
+Status on 2026-10-25: the runner, the event-log parser and the report are implemented and tested
+(`make check-spark`); only a 25% probe has been run. **The 25/50/100% benchmark is still to be
+run**, so there are no scalability results yet.
+
+Contract approved by the user on 2026-10-25:
+- Nested user samples 0.25 / 0.5 / 1 with seed 2221. All three are split with the cutoffs of the
+  100% split `p0.8-0.1-0.1-k5-5` (`--cutoffs-from`), so the 100% point is also re-split.
+- The four frozen test settings: popularity W=180, bias λ=10, ALS rank 50 / reg 0.03, bias+ALS
+  rank 50 / reg 0.1. They are passed as the `stage.json` of the trained test models. The runner
+  refuses before starting if the config cannot reproduce them, and checks them again after each fit.
+  There is no hyperparameter search.
+- `configs/real.toml` resources (`local[8]`, 12 GB driver, 64 shuffle partitions, event log on).
+- One repetition, labelled "single run". Warm cache, declared. MongoDB writes not measured (P7 pending).
+
+Measurement type: stage from materialized input.
+- **ETL** is not re-run. It is timed once at full input (`etl/stage.json`) and is not a scaling point.
+- **Isolation:** for each fraction the runner builds a fresh mini-run under
+  `<run>/benchmarks/<label>/rep-1/fraction-<f>/`, with a copy of `run.json` and a symlink to `etl/`.
+  It runs `sample`, `split`, then `train` and `recommend` (top-20 for every training user) for
+  each model, each as a new CLI process with its own JVM.
+- **Warm cache:** before each fraction it reads the ETL Parquet once, so every scale starts with
+  the same warm cache.
+- **Order:** fractions run in ascending order; they are not randomized.
+- **Host state:** each row records the host load and free memory before the stage.
+- **Failures and reruns:** a failed or timed-out stage is a visible row, and the stages that depend
+  on it are `skipped`. A completed benchmark is never overwritten; an interrupted one is renamed
+  `<label>.aborted-<time>`.
+
+Each stage records its own timings:
+- `spark_start` (JVM launch and session) is timed separately.
+- The headline ratio uses work seconds: stage total minus `spark_start` minus `verification_counts`.
+- The whole stage total and the process wall time are kept as secondary columns.
+
+Sizes come from each stage's actual input rows:
+- sample: the ETL rows, constant across scales, so the sample is not input scaling;
+- split: the sample rows;
+- train and recommend: the training rows after k-core.
+
+Each fraction also records k-core passes and retention (`scales.jsonl`). The event log of each
+stage, linked by application id, gives:
+- shuffle read/write;
+- spill;
+- GC share;
+- task skew (slowest task / median per Spark stage), as a maximum over the Spark stages whose
+  slowest task takes at least 1 s;
+- the sampled peak JVM heap.
+
+Run it with nothing else heavy on the host (no other Spark job, no browser load). It takes an
+estimated 25-40 min and about 3 GB:
+- **Time basis:** split and train scale about linearly in rows (×4-5 from the probe below). The
+  exact ALS and bias+ALS top-20 scale with users × items, about 12.5× (536,945/114,908 ×
+  153,860/57,407), so about 5.5 min each at 100%.
+- **Disk basis:** 0.4 GB for the probe, so about 0.4 + 0.8 + 1.6 GB.
+- **Memory:** the heap at 100% is not extrapolated. Watch ALS training on about 5× the rows; that is
+  the main out-of-memory risk.
+
+```bash
+R=storage/runs/20261025T093611Z-2b4b605ead0f
+M=$R/samples/fraction-1-seed-2221/splits/refit-c0cb58f463fb-k5-5/models
+.venv/bin/amazon-recommender benchmark --config configs/real.toml --run $R --label fixed-resource-v1 \
+  --reference-split $R/samples/fraction-1-seed-2221/splits/p0.8-0.1-0.1-k5-5/stage.json \
+  --model-stage $M/popularity-smoothing10-window_days180/stage.json \
+  --model-stage $M/bias-regularization10-max_passes10-tolerance0.0001/stage.json \
+  --model-stage $M/als-rank50-regularization0.03-iterations10-seed2221-user_blocks10-item_blocks10/stage.json \
+  --model-stage $M/bias-als-rank50-regularization0.1-iterations10-seed2221-user_blocks10-item_blocks10-bias_regularization10-bias_max_passes10-bias_tolerance0.0001/stage.json \
+  --fractions 0.25 0.5 1
+.venv/bin/amazon-recommender benchmark-report --benchmark $R/benchmarks/fixed-resource-v1
+```
+
+Outputs are in `<run>/benchmarks/<label>/`:
+- `manifest.json`: the contract, resources, host, and git revision plus a hash of uncommitted changes;
+- `measurements.jsonl` / `.csv`: one row per stage run, including failed ones;
+- `scales.jsonl`;
+- after `benchmark-report`: `report.json`, `report.csv` and `scaling.svg`. The figure plots the time
+  ratio against the input ratio relative to 25%; the diagonal is linear scaling.
+
+Limitations:
+- one host in local mode (`local[8]`), so this is fixed-resource input scaling, not worker speedup;
+- three points, one run each;
+- ascending order;
+- warm cache;
+- k-core retention changes with the sample, so it is reported beside the times.
+
+25% probe (2026-10-25, label `probe-0.25`, an estimate only, not the 25% point): 1,624,497 users and
+4,288,107 interactions. After the frozen cutoffs and 13 k-core passes, 1,204,219 training rows
+remained (114,908 users, 57,407 items). All ten stages completed in 3 min 42 s of wall time, with
+identical resources:
+
+| Stage | Work seconds |
+| --- | --- |
+| split | 35.1 |
+| train popularity | 4.3 |
+| train bias | 14.1 |
+| train ALS | 21.9 |
+| train bias+ALS | 32.7 |
+| exact top-20 ALS | 26.8 |
+| exact top-20 bias+ALS | 27.1 |
+| sample (constant input: full ETL scan) | 9.8 |
+| top-20 popularity | 6.0 |
+| top-20 bias | 10.0 |
+
+Other probe observations:
+- **Spark start-up** took 1.6-3.5 s per stage.
+- **Memory:** the sampled peak heap was 3.8 GB of 12 GB, and there was no spill. Short stages
+  report 0 because the heap is sampled.
+- **Split skew:** the split's largest task skew (29) was in a sub-second stage, the projection
+  counts, whose slowest task took 0.46 s. The longest Spark stages had skew ≤ 3.1.
+- **Host load:** the load was already 3.4 before the probe (desktop applications); this is the only
+  statement about external load. The load recorded before each later stage includes the previous
+  stage's own `local[8]` work, because the 1-minute average decays slowly. It rose from 3.4 to 7.9.
 
 ## First run on the real category
 

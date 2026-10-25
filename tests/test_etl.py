@@ -109,7 +109,8 @@ class SparkEtlTests(EtlTests):
         self.assertEqual(stage["metadata"]["interaction_items_without_title"], 1)  # i3: blank title only
         self.assertEqual(stage["resources"]["master"], self.config.spark.master)
         self.assertEqual(set(stage["timings_seconds"]), {
-            "reviews_classify_count", "reviews_deduplicate_write", "metadata_count_write", "verification_counts", "total",
+            "spark_start", "reviews_classify_count", "reviews_deduplicate_write", "metadata_count_write",
+            "verification_counts", "total",
         })
 
         from pyspark.sql import SparkSession

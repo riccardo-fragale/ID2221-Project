@@ -424,7 +424,8 @@ def run_evaluate(config: ProjectConfig, run_directory: Path, sample: str, split:
 
     timings = {}
     started = time.monotonic()
-    spark = create_spark_session(config, app_name="amazon-recommender-evaluate")
+    with timed(timings, "spark_start"):  # JVM launch and session; not data work
+        spark = create_spark_session(config, app_name="amazon-recommender-evaluate")
     try:
         items = spark.read.parquet(str(split_directory / split_stage["outputs"]["items"]))
         coverage_counts, user_types = None, None

@@ -64,7 +64,8 @@ def run_sample(config: ProjectConfig, run_directory: Path) -> Path:
 
     timings = {}
     started = time.monotonic()
-    spark = create_spark_session(config, app_name="amazon-recommender-sample")
+    with timed(timings, "spark_start"):  # JVM launch and session; not data work
+        spark = create_spark_session(config, app_name="amazon-recommender-sample")
     try:
         spark.conf.set("spark.sql.parquet.outputTimestampType", "TIMESTAMP_MICROS")
         source = spark.read.parquet(str(run_directory / "etl/interactions"))

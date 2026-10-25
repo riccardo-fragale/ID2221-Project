@@ -119,7 +119,8 @@ def run_etl(config: ProjectConfig, run_directory: Path) -> Path:
 
     timings = {}
     started = time.monotonic()
-    spark = create_spark_session(config, app_name="amazon-recommender-etl")
+    with timed(timings, "spark_start"):  # JVM launch and session; not data work
+        spark = create_spark_session(config, app_name="amazon-recommender-etl")
     try:
         spark.conf.set("spark.sql.parquet.outputTimestampType", "TIMESTAMP_MICROS")
         parsed = classify_reviews(_read_json(spark, inputs["reviews"], review_schema()))

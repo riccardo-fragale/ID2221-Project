@@ -212,7 +212,8 @@ def run_split(config: ProjectConfig, run_directory: Path, sample: str, *, cutoff
 
     timings = {}
     started = time.monotonic()
-    spark = create_spark_session(config, app_name="amazon-recommender-split")
+    with timed(timings, "spark_start"):  # JVM launch and session; not data work
+        spark = create_spark_session(config, app_name="amazon-recommender-split")
     # Spark does not delete reliable checkpoints; remove this session's directory at the end.
     checkpoints = Path(urlparse(spark.sparkContext.getCheckpointDir()).path)
     try:
