@@ -144,6 +144,10 @@ class PreconditionTests(SplitRunTests):
         with self.assertRaises(FileNotFoundError):
             run_split(self.config, self.run_directory, self.sample)
 
+    def test_cutoffs_and_refit_sources_are_exclusive(self):
+        with self.assertRaises(ValueError):
+            run_split(self.config, self.run_directory, self.sample, cutoffs_from=Path("a"), refit_from=Path("b"))
+
     def test_completed_split_is_not_overwritten(self):
         sample = self.run_directory / "samples" / self.sample
         (sample / "splits" / split_label([0.8, 0.1, 0.1], 2, 2)).mkdir(parents=True)
@@ -213,6 +217,18 @@ class SparkSplitTests(SplitRunTests):
         self.assertEqual(copied["before_filtering"], stage["before_filtering"])
         self.assertEqual(copied["mappings"], stage["mappings"])
         self.assertEqual(copied["policy"]["cutoffs_from"]["path"], str(output / "stage.json"))
+
+        # Refit: train is the source's train + validation window, validation is empty, test unchanged.
+        refit = run_split(self.config, self.run_directory, self.sample, refit_from=output / "stage.json")
+        refitted = json.loads((refit / "stage.json").read_text())
+        self.assertTrue(refit.name.startswith("refit-"))
+        self.assertEqual(refitted["cutoffs_ms"], {"train": cutoffs["validation"], "validation": cutoffs["validation"]})
+        self.assertEqual(refitted["before_filtering"]["interactions"], {
+            "train": before["train"] + before["validation"], "validation": 0, "test": before["test"],
+        })
+        self.assertEqual(refitted["policy"]["refit_from"]["path"], str(output / "stage.json"))
+        self.assertIsNone(refitted["policy"]["cutoffs_from"])
+        self.assertEqual(refitted["interactions"]["validation"], 0)
 
 
 if __name__ == "__main__":

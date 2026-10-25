@@ -13,6 +13,12 @@ a group of identical timestamps always falls in one window (the earlier one). In
 proportions, the two cutoffs can be copied from another split's `stage.json`, so that
 several cohorts share frozen boundaries.
 
+Refit: with `refit_from`, both cutoffs become the source split's validation cutoff, so the
+training window is the source's train + validation (k-core and mappings recomputed on it), the
+validation window is empty and the test window is unchanged. Test-time models are then fitted
+right up to the start of the test window, as the dev models are for validation (approved
+2026-10-25: option (b), hyperparameters frozen on the dev validation window).
+
 K-core: users and items with fewer than `user_min_reviews` / `item_min_reviews` training
 interactions are removed, and degrees are recomputed until nothing is below threshold.
 Validation and test keep only rows whose user and item both survive in training.
@@ -37,8 +43,12 @@ MAX_INDEX = 2**31 - 2  # Spark ALS ids are signed 32-bit integers
 WINDOWS = ("train", "validation", "test")
 
 
-def split_label(split, user_min: int, item_min: int, cutoffs_source: str | None = None) -> str:
-    policy = f"cutoffs-{cutoffs_source[:12]}" if cutoffs_source else "p" + "-".join(f"{v:g}" for v in split)
+def split_label(split, user_min: int, item_min: int, cutoffs_source: str | None = None, *,
+                refit: bool = False) -> str:
+    if cutoffs_source:
+        policy = f"{'refit' if refit else 'cutoffs'}-{cutoffs_source[:12]}"
+    else:
+        policy = "p" + "-".join(f"{v:g}" for v in split)
     return f"{policy}-k{user_min}-{item_min}"
 
 
@@ -167,8 +177,11 @@ def _iso(ms: int) -> str:
     return datetime.fromtimestamp(ms / 1000, timezone.utc).isoformat()
 
 
-def run_split(config: ProjectConfig, run_directory: Path, sample: str, *, cutoffs_from: Path | None = None) -> Path:
+def run_split(config: ProjectConfig, run_directory: Path, sample: str, *, cutoffs_from: Path | None = None,
+              refit_from: Path | None = None) -> Path:
     """Split one completed sample of a run. Starts Spark."""
+    if cutoffs_from is not None and refit_from is not None:
+        raise ValueError("Use either cutoffs_from or refit_from, not both")
     run_directory = Path(run_directory).resolve(strict=True)
     sample_directory = run_directory / "samples" / sample
     sample_stage_path = sample_directory / "stage.json"
@@ -178,12 +191,14 @@ def run_split(config: ProjectConfig, run_directory: Path, sample: str, *, cutoff
     experiment = sample_stage["config"]["experiment"]
     split, user_min, item_min = experiment["split"], experiment["user_min_reviews"], experiment["item_min_reviews"]
     source = None
-    if cutoffs_from is not None:
-        cutoffs_from = Path(cutoffs_from).resolve(strict=True)
-        source_bytes = cutoffs_from.read_bytes()
+    if cutoffs_from is not None or refit_from is not None:
+        source_path = Path(cutoffs_from or refit_from).resolve(strict=True)
+        source_bytes = source_path.read_bytes()
         frozen = json.loads(source_bytes)["cutoffs_ms"]
-        source = {"path": str(cutoffs_from), "sha256": hashlib.sha256(source_bytes).hexdigest()}
-    label = split_label(split, user_min, item_min, source and source["sha256"])
+        if refit_from is not None:
+            frozen = {"train": frozen["validation"], "validation": frozen["validation"]}
+        source = {"path": str(source_path), "sha256": hashlib.sha256(source_bytes).hexdigest()}
+    label = split_label(split, user_min, item_min, source and source["sha256"], refit=refit_from is not None)
     final, partial = sample_directory / "splits" / label, sample_directory / "splits" / f"{label}.partial"
     if final.exists():
         raise FileExistsError(f"Split already completed for this sample: {final}")
@@ -254,7 +269,8 @@ def run_split(config: ProjectConfig, run_directory: Path, sample: str, *, cutoff
             "policy": {
                 "method": "global chronological split by interaction count; equal timestamps share a window",
                 "split": split if source is None else None,
-                "cutoffs_from": source,
+                "cutoffs_from": source if refit_from is None else None,
+                "refit_from": source if refit_from is not None else None,
                 "user_min_reviews": user_min,
                 "item_min_reviews": item_min,
             },

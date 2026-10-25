@@ -1,4 +1,5 @@
-"""Local pipeline commands. Only etl, sample and split start Spark; none contacts MongoDB."""
+"""Local pipeline commands. Only etl, sample, split, train, evaluate, select-popularity-window and select-grid
+start Spark; none contacts MongoDB."""
 
 import argparse
 from dataclasses import asdict, replace
@@ -8,9 +9,10 @@ import sys
 import tomllib
 
 from amazon_recommender.config import load_config
-from amazon_recommender.config.experiment import parse_experiment
+from amazon_recommender.config.experiment import parse_experiment, parse_model
 from amazon_recommender.environment import inspect_environment
 from amazon_recommender.artifacts import create_run
+from amazon_recommender.models import MODELS
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -35,6 +37,41 @@ def main(argv: list[str] | None = None) -> int:
     split.add_argument("--run", type=Path, required=True, help="Run directory with a completed sample")
     split.add_argument("--sample", required=True, help="Sample label, e.g. fraction-0.2-seed-2221")
     split.add_argument("--cutoffs-from", type=Path, help="Reuse the cutoffs of another split's stage.json")
+    split.add_argument("--refit-from", type=Path,
+                       help="Train on another split's train + validation windows; its test window is kept")
+    train = subcommands.add_parser("train", help="Fit one model on a split's training window; starts Spark")
+    train.add_argument("--config", type=Path, required=True, help="Spark resources and [model] hyperparameters")
+    train.add_argument("--run", type=Path, required=True, help="Run directory with a completed split")
+    train.add_argument("--sample", required=True, help="Sample label, e.g. fraction-0.2-seed-2221")
+    train.add_argument("--split", required=True, help="Split label, e.g. p0.8-0.1-0.1-k5-5")
+    train.add_argument("--model", required=True, choices=sorted(MODELS))
+    train.add_argument("--popularity-window-days", help='Override model.popularity_window_days: "all" or days')
+    train.add_argument("--rank", type=int, help="Override model.rank (ALS)")
+    train.add_argument("--regularization", type=float, help="Override model.regularization (ALS)")
+    train.add_argument("--iterations", type=int, help="Override model.iterations (ALS)")
+    evaluate = subcommands.add_parser("evaluate", help="Metrics of a trained model on a held-out window; starts Spark")
+    evaluate.add_argument("--config", type=Path, required=True, help="Spark resources and bootstrap seed")
+    evaluate.add_argument("--run", type=Path, required=True)
+    evaluate.add_argument("--sample", required=True)
+    evaluate.add_argument("--split", required=True)
+    evaluate.add_argument("--model-label", required=True,
+                          help="Directory name under <split>/models/, or oracle-popularity (reference only)")
+    evaluate.add_argument("--window", required=True, choices=("validation", "test"))
+    evaluate.add_argument("--horizon-days", type=int, help="Only held-out rows within this many days of the fit end")
+    evaluate.add_argument("--coverage", action="store_true",
+                          help="Serving view: the popularity fallback on all held-out users, including unknown ones")
+    select = subcommands.add_parser("select-popularity-window",
+                                    help="Choose the popularity window from validation evaluations; starts Spark")
+    select.add_argument("--config", type=Path, required=True)
+    select.add_argument("--run", type=Path, required=True)
+    select.add_argument("--sample", required=True)
+    select.add_argument("--split", required=True)
+    grid = subcommands.add_parser("select-grid", help="Choose ALS settings from validation evaluations; starts Spark")
+    grid.add_argument("--config", type=Path, required=True)
+    grid.add_argument("--run", type=Path, required=True)
+    grid.add_argument("--sample", required=True)
+    grid.add_argument("--split", required=True)
+    grid.add_argument("--model", required=True, choices=("als", "bias-als"))
     args = parser.parse_args(argv)
     if args.command == "doctor":
         report = inspect_environment()
@@ -62,7 +99,36 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "split":
             from amazon_recommender.split import run_split
 
-            print(run_split(config, args.run, args.sample, cutoffs_from=args.cutoffs_from) / "stage.json")
+            print(run_split(config, args.run, args.sample, cutoffs_from=args.cutoffs_from,
+                            refit_from=args.refit_from) / "stage.json")
+            return 0
+        if args.command == "train":
+            from amazon_recommender.train import run_train
+
+            overrides = {key: getattr(args, key) for key in ("rank", "regularization", "iterations")
+                         if getattr(args, key) is not None}
+            if args.popularity_window_days is not None:
+                window = args.popularity_window_days
+                overrides["popularity_window_days"] = window if window == "all" else int(window)
+            if overrides:
+                config = replace(config, model=parse_model({**asdict(config.model), **overrides}))
+            print(run_train(config, args.run, args.sample, args.split, args.model) / "stage.json")
+            return 0
+        if args.command == "evaluate":
+            from amazon_recommender.evaluate import run_evaluate
+
+            print(run_evaluate(config, args.run, args.sample, args.split, args.model_label, args.window,
+                               horizon_days=args.horizon_days, coverage=args.coverage) / "stage.json")
+            return 0
+        if args.command == "select-grid":
+            from amazon_recommender.evaluate import run_select_grid
+
+            print(run_select_grid(config, args.run, args.sample, args.split, args.model))
+            return 0
+        if args.command == "select-popularity-window":
+            from amazon_recommender.evaluate import run_select_popularity_window
+
+            print(run_select_popularity_window(config, args.run, args.sample, args.split))
             return 0
     except (OSError, ValueError, TypeError, tomllib.TOMLDecodeError) as exc:
         print(f"Invalid configuration or input: {exc}", file=sys.stderr)

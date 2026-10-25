@@ -8,9 +8,9 @@ fixed-resource input scaling, MongoDB top-20 serving, and a Streamlit dashboard.
 The development foundation provides an installed Python package and lockfile,
 validated experiment settings, input/output schemas, run configuration/input
 snapshots, a non-starting environment check, an explicit Spark-session factory,
-a MongoDB Compose setup, and foundation tests. Data ingestion, models,
-metrics, publication, and the dashboard are still to be implemented. The ETL stage
-described below is the first implemented stage. No quality
+a MongoDB Compose setup, and foundation tests. ETL, sampling, the split and the
+popularity/bias-only baselines are implemented; ALS, metrics, publication, and the dashboard
+are still to be implemented. No quality
 or scalability results have been measured. Spark has not been started for this
 increment, so the Spark-session factory is not yet runtime verified.
 
@@ -86,9 +86,326 @@ with `train/`, `validation/`, `test/`, `users/`, `items/` and `stage.json`, comp
   of partitioning; `stage.json` records count, maximum index and a digest per mapping. All
   three windows carry both indices.
 
-`make check` skips the Spark tests; `make check-spark` runs the ETL, sampling and split ones and needs Java 17.
+`make check` skips the Spark tests; `make check-spark` runs the ETL, sampling, split, model and evaluation ones and needs Java 17.
 They passed on 2026-10-25 on synthetic data on the Linux machine (Ubuntu 24.04), which uses
 OpenJDK 17.0.20.1 selected through `JAVA_HOME`.
+
+## Train stage (model contract, popularity and bias-only baselines)
+
+`amazon-recommender train --config <config> --run storage/runs/<run-id> --sample <label> --split <label> --model popularity|bias`
+requires a completed split and starts Spark. Hyperparameters come from the `--config` file's
+`[model]` section; the split is not changed. Output: `<split>/models/<model-label>/` with the
+saved model (`model/`) and `stage.json`, completed by rename. The label names the model and its
+parameters (e.g. `bias-regularization10-max_passes10-tolerance0.0001`).
+
+All models in `models.py` share one contract on the split's dense indices: `fit(train)`,
+`predict(pairs)` (adds a raw, unclipped `prediction`; clipping to [1,5] belongs to evaluation),
+`recommend(users, seen, k)` returning `(user_index, item_index, rank, score)`, `save`, and
+`load_model`. Each model declares its fitting window, candidate universe, seen-item policy,
+cold-start behavior, ranking score, rating predictor and whether it is approximate in `contract`.
+The seen pairs are an argument, so evaluation and serving choose the history to exclude. Outputs
+stay index-based: mapping back to original IDs and labeling model or fallback lists belong to
+recommendation materialization. A saved model records the split `stage.json` SHA-256 and the
+mapping digests; `load_model(..., mappings=...)` refuses a model fitted on other mappings.
+
+- Popularity ranks by the interaction count in the last `popularity_window_days` of the fitted
+  data (after the latest fitted timestamp minus W days; `"all"` is the original whole-history
+  rule) and predicts ratings separately with `(item_rating_sum + alpha * mean) / (item_count + alpha)`
+  over all training rows; an unknown item predicts the mean. Items without interactions in the
+  window stay in the catalog with count 0. `train --popularity-window-days` overrides the config.
+- Bias-only follows P0.4: training mean, zero start, user update then item update per pass,
+  regularization 10 for both, stop after the first complete pass whose largest absolute change
+  is below 0.0001, or after 10 passes. Each pass is checkpointed. Missing biases are zero.
+  `fit` in `stage.json` records the passes, the largest change per pass and `converged`.
+- For both, every user shares one item order (score descending, ties by ascending
+  `item_index`, i.e. ascending original ID). A user who has seen n items needs at most the first
+  k + n positions, so ranking joins on position instead of crossing users with the catalog, and
+  is exact. Lists are shorter than k only when the catalog runs out of unseen items. Bias-only
+  scores are the full prediction `mean + user_bias + item_bias`.
+
+Measured on 2026-10-25 on the 20% development split (`p0.8-0.1-0.1-k5-5`, `configs/real.toml`,
+warm cache): both models fitted on 912,329 interactions (mean rating 4.296). Popularity took
+5.6 s in total, bias-only 14.1 s and converged after 9 passes (last change 5.2e-5). Top-20 lists
+for all 88,251 training users (1,765,020 rows, none already seen) took 1.8 s (popularity) and
+5.0 s (bias-only) in a separate timing script. These are single development measurements, not
+quality or scalability results.
+
+## Popularity window, test-time refit and evaluation (approved 2026-10-25)
+
+The user approved two protocol changes after the first validation results, in which
+whole-history popularity reached NDCG@10 of about 0.00005 (2 of 6,123 users with a hit): the
+all-time top items were reviewed in 2015-2016, while 94% of validation rows are on items beyond
+popularity rank 1000.
+
+- P0.3 change: popularity has a window hyperparameter W in {30, 90, 180, 365, all} days, chosen
+  on the development validation window like the ALS settings. `all` stays as the reported
+  whole-history row. Seen-item exclusion and the rating adapter use the full training history.
+- P0.5 change, option (b): test-time models are fitted on train + validation, with every
+  hyperparameter frozen from development. `split --refit-from <split stage.json>` makes that
+  split: both cutoffs become the source's validation cutoff, k-core and mappings are recomputed on
+  train + validation, validation is empty and the test window is unchanged (label
+  `refit-<sha>-k<u>-<i>`). Fitting then ends where the evaluated window starts, for validation
+  and test alike.
+
+`evaluate --run R --sample S --split P --model-label M --window validation|test` writes
+`<split>/evaluations/<window>/<model-label>/` with `stage.json` and per-user Parquet, following
+P0.3: relevance rating >= 4, cohort = held-out users with at least one relevant item (the others
+are counted), top-10 over the training catalog excluding the user's training items, Precision@10
+over 10 including short lists, binary NDCG@10, macro averages, user-level bootstrap 95% intervals
+(2000 resamples, config seed), and RMSE on all held-out ratings with predictions clipped to [1,5]
+plus raw RMSE, clipped rows and missing or nonfinite predictions. Ranking metrics are also broken
+down by the user's number of training items (<5, 5-9, 10-49, 50+) as a diagnostic. The test window
+is evaluated only on a refit split, so items rated in validation count as seen.
+
+Reference rows and additional views (approved 2026-10-25, after the baseline test results above
+had been seen):
+
+- Random reference: every evaluation stores the exact expectation of a uniformly random top-10
+  over each user's unseen catalog (P@10, NDCG@10, Recall@50/100, expected users with a hit) and
+  tests the observed users-with-a-hit count against it (one-sided, Poisson approximation, with
+  `log10_p_value_one_sided` where the p-value underflows). It is not a system.
+- Oracle popularity: `--model-label oracle-popularity` ranks the catalog by the relevant ratings
+  of the evaluated view itself. It is the best single global order for that view, uses the labels
+  and is never used for decisions; personalized models can exceed it.
+- Recall@50 and Recall@100 (relevant items in the top K / the user's relevant items) are
+  secondary metrics from the same lists; P@10 and NDCG@10 stay primary.
+- `--horizon-days 180`: only held-out rows within 180 days of the end of the fitted window, as an
+  additional view next to the full window, motivated by periodic retraining. It changes the
+  cohort (users active in those days), so its counts are reported separately.
+- `--coverage`: the popularity fallback (or the oracle) on every held-out user with a relevant
+  item in the catalog, including users unknown to training. Users removed by the k-core keep
+  their pre-k-core training items as seen items; new users have none. `user_types` breaks the
+  results down into known, removed_by_k_core and new users. It is a serving view, never part of
+  the model comparison (P0.5).
+
+Views are stored as `<split>/evaluations/<window>[-h<H>d][-coverage]/<model-label>/`.
+
+Structural ceiling first: of the 1,249,679 relevant test ratings before any projection, 53.1%
+are on items outside the k-core catalog (41.2% on items never rated before the refit cutoff),
+so at most about 47% are reachable by any model fitted at the cutoff.
+
+Measured on 2026-10-25 (same splits as above; hits = users with at least one relevant item in
+their top 10; expected = random reference; p is the one-sided test of the hit count against
+random, Poisson approximation, conservative for the upper tail; exact values are in each
+`stage.json`, including `log10_p_value_one_sided`):
+
+| View | System | Users | NDCG@10 [95% CI] | Hit rate | Recall@100 | Hits / expected | p |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Dev validation | Popularity W=180 | 6,123 | 0.0078 [0.0061, 0.0095] | 2.04% | 0.057 | 125 / 3.2 | < 1e-10 |
+| Dev validation | Popularity W=all | 6,123 | 0.00005 [0, 0.0001] | 0.03% | 0.005 | 2 / 3.2 | 0.83 |
+| Dev validation | Bias-only | 6,123 | 0.0002 [0, 0.0003] | 0.07% | 0.004 | 4 / 3.2 | 0.40 |
+| Dev validation | Random (reference) | 6,123 | 0.00012 | | 0.002 | | |
+| Dev validation | Oracle popularity (reference) | 6,123 | 0.0122 [0.0104, 0.0140] | 3.77% | 0.100 | 231 / 3.2 | |
+| Test (refit) | Popularity W=180 | 44,612 | 0.0034 [0.0030, 0.0038] | 0.93% | 0.028 | 415 / 7.1 | < 1e-10 |
+| Test (refit) | Popularity W=all | 44,612 | 0.00004 [0, 0.0001] | 0.02% | 0.002 | 7 / 7.1 | 0.56 |
+| Test (refit) | Bias-only | 44,612 | 0.00007 [0, 0.0001] | 0.04% | 0.002 | 17 / 7.1 | 0.001 |
+| Test (refit) | Random (reference) | 44,612 | 0.000034 | | 0.0006 | | |
+| Test (refit) | Oracle popularity (reference) | 44,612 | 0.0090 [0.0084, 0.0096] | 2.53% | 0.055 | 1,128 / 7.1 | |
+| Test, 180-day horizon | Popularity W=180 | 21,613 | 0.0054 [0.0048, 0.0061] | 1.40% | 0.042 | 302 / 2.6 | < 1e-10 |
+| Test, 180-day horizon | Bias-only | 21,613 | 0 | 0% | 0.002 | 0 / 2.6 | 1 |
+| Test, 180-day horizon | Oracle popularity (reference) | 21,613 | 0.0158 [0.0146, 0.0171] | 3.55% | 0.084 | 767 / 2.6 | |
+| Test coverage (serving) | Popularity W=180 | 359,147 | 0.0073 [0.0071, 0.0075] | 1.68% | 0.042 | 6,031 / 33.4 | < 1e-10 |
+| Test coverage (serving) | Popularity W=all | 359,147 | 0.00004 [0, 0.0001] | 0.01% | 0.002 | 47 / 33.4 | 0.015 |
+
+About 20 system/view p-values are reported, so they are descriptive: signal is claimed only
+where it survives a Bonferroni threshold of about 0.0025. Bias-only with 0 hits for 2.6
+expected on the 180-day horizon is not above random (P(X = 0) = 0.07), not below it, and
+whole-history popularity at p = 0.015 on the coverage view is not evidence of signal.
+Recent popularity is far above random in every view (39 to 180 times the random hit count);
+whole-history popularity is at random level, and bias-only ranking is barely above it on the
+test window (17 hits for 7.1 expected, p = 0.001) and not on validation. In absolute terms 98-99%
+of users still get no relevant item in their top 10. The test coverage view covers 359,147 users:
+44,612 known (NDCG@10 0.0034, 415 hits, matching the model comparison), 87,178 removed by the
+k-core (0.0063, 1,298 hits) and 227,357 new users (0.0085, 4,318 hits). It keeps 750,953 of
+1,715,851 test rows; the rest are on items outside the catalog.
+
+Why the absolute numbers are small, measured on the full test window (relevant ratings before
+projection, 1,249,679): 41.2% are on items never rated before the refit cutoff, which no model
+fitted before that date can recommend, and 53.1% are on items outside the k-core catalog. Among
+the ratings on catalog items, 81.3% are on items first rated more than two years before the
+cutoff, so within the catalog the relevant items are mostly not new releases. The development
+validation window is similar (40.5% new items, 64.5% outside the catalog). The horizon decay
+(dev validation NDCG@10 0.020 in the first month, 0.008 over the full window) mixes time and
+cohort composition, since the users active in the first month differ from the full cohort. As in
+every offline evaluation, an item counts as relevant only if the user chose to review it, so the
+absolute metrics are conservative for every system alike.
+
+
+`select-popularity-window` applies a rule written after exploratory validation numbers for some
+windows had been seen (30-365 days, 0.0061-0.0078), and before any test result: best = highest mean
+validation NDCG@10 (ties: longer window); chosen = the longest window, at least as long as the
+best, whose paired user-level bootstrap 95% interval of the NDCG difference to the best contains
+0. It writes `<split>/selections/popularity-window.json`.
+
+Measured on 2026-10-25 (`configs/real.toml`, warm cache). Development validation, 20% sample,
+6,123 cohort users:
+
+| Model | NDCG@10 [95% CI] | P@10 | Users with a hit | RMSE |
+| --- | --- | --- | --- | --- |
+| Popularity W=30 | 0.0072 [0.0058, 0.0087] | 0.0022 | 126 | 1.159 |
+| Popularity W=90 | 0.0075 [0.0059, 0.0091] | 0.0020 | 117 | 1.159 |
+| Popularity W=180 | 0.0078 [0.0061, 0.0095] | 0.0021 | 125 | 1.159 |
+| Popularity W=365 | 0.0061 [0.0046, 0.0078] | 0.0014 | 82 | 1.159 |
+| Popularity W=all | 0.00005 [0, 0.00013] | 0.00003 | 2 | 1.159 |
+| Bias-only | 0.00015 [0.00001, 0.00034] | 0.00007 | 4 | 1.071 |
+
+The rule chose W = 180 days (30 and 90 are within noise but shorter; 365 and all are worse).
+
+Full category, refit split `refit-c0cb58f463fb-k5-5` (train = everything up to 2020-11-17,
+6,685,212 interactions after k=5, 598,310 users, 175,550 items; split 105 s). The test window
+keeps 162,922 of 1,715,851 rows (9.5%); the cohort is 44,612 of 53,753 test users:
+
+| Model | NDCG@10 [95% CI] | P@10 | Users with a hit | RMSE |
+| --- | --- | --- | --- | --- |
+| Popularity W=180 | 0.0034 [0.0030, 0.0038] | 0.00093 | 415 | 1.263 |
+| Popularity W=all | 0.00004 [0.00001, 0.00008] | 0.00002 | 7 | 1.263 |
+| Bias-only | 0.00007 [0.00003, 0.00011] | 0.00004 | 17 | 1.151 |
+
+Bias fitting on this split stopped at the 10-pass limit without converging (`converged: false`,
+last change 2.3e-4), which the approved rule allows. The test window spans about 2.5 years after
+the refit cutoff. These baseline test evaluations were run on 2026-10-25, after W was frozen and
+before any decision on evaluation horizons or ALS, so every later protocol change is made after
+this look at the baseline test results. ALS has not been run yet.
+
+## Test reporting plan (frozen 2026-10-25, before any ALS result)
+
+Fixed before ALS is trained or touches the test window, so that views are not chosen after
+seeing ALS results (approved by the user with the critic's review):
+
+- Headline: NDCG@10 on the standard test view of the refit split, for the four systems
+  (popularity with the selected window, bias-only, ALS, bias+ALS), with bootstrap intervals,
+  users with a hit against the random expectation, and the random and oracle-popularity
+  reference rows. The ALS comparison cohort is this standard cohort of known users.
+- Secondary metrics: P@10, hit rate, Recall@50 and @100 (with lists shorter than 100 reported),
+  and RMSE (clipped, with raw RMSE).
+- Additional views: the 180-day horizon (same systems) and the coverage view (popularity
+  fallback and oracle only, reported separately as serving coverage).
+- Diagnostics: the training-item segments (<5, 5-9, 10-49, 50+) and, in the coverage view, the
+  user types, always with users-with-a-hit counts next to the NDCG values.
+- ALS hyperparameters are chosen on the development validation window only, compared with
+  popularity W=180 on the same development cohort, and refitted on train + validation for test.
+  Already seen before freezing: the baseline test results above.
+
+## ALS and bias+ALS (P4.3, P4.4)
+
+`train --model als|bias-als [--rank R --regularization L --iterations N]` fits explicit-feedback
+Spark ALS (`implicitPrefs=False`, `nonnegative=False`, seed from the config, checkpoint every 5
+iterations). Plain ALS fits the original ratings; bias+ALS first fits the biases exactly as the
+bias-only model and then fits ALS on the signed residuals `rating - mean - user_bias - item_bias`.
+Predictions are `dot(factors)` and `mean + user_bias + item_bias + dot(factors)`, unclipped; a
+user or item without factors gets no prediction (counted as missing) and no recommendations.
+
+Ranking is exact over the whole catalog: the item factor matrix is broadcast and each partition
+scores its users with numpy in blocks, masks seen items and keeps the top k (ties by ascending
+item_index). For bias+ALS the item bias is appended to the item vector and a 1 to the user vector,
+so the full score, including the item bias, decides the order. This is the exact option of P0.4;
+the approximate shortlist approved in P0.4 is not needed (about 44,612 users x 175,550 items x
+rank on the full test), so `approximate` is false. The user approved this change to P0.4 on
+2026-10-25, and the `shortlist_size`/`shortlist_cap` settings were removed. Spark ALS block counts
+are set by `num_user_blocks`/`num_item_blocks` (10, Spark's default, also used by the development
+grid before they were configurable); factors depend on blocks and partitioning, so a seed makes
+runs reproducible within numerical tolerance, not bit for bit. `fit` records the training RMSE.
+Spark's `regParam` (ALS-WR, scaled by each user's and item's rating count) is not comparable to
+the absolute bias regularization of 10; do not align them.
+
+Development grid and selection rule, fixed on 2026-10-25 before any ALS result: rank in
+{10, 25, 50} x regularization in {0.03, 0.1, 0.3}, 10 iterations, seed 2221, for both ALS models,
+fitted on the 20% development training window and evaluated on its validation window.
+`select-grid --model als|bias-als` picks the highest mean validation NDCG@10; ties go to the
+smaller rank, then the larger regularization, then fewer iterations. The selected settings are
+then refitted on the refit split (train + validation) for the test window, without retuning.
+Spark's `regParam` is scaled by each user's and item's number of ratings (ALS-WR).
+
+Development grid results, 2026-10-25 (all 18 trials; 20% validation window, 6,123 users; random
+expectation 3.2 users with a hit; no list shorter than 100; Spark default 10/10 blocks). Columns:
+validation NDCG@10, users with a hit, Recall@100, validation RMSE, training RMSE.
+
+| Model | Rank | Reg. | NDCG@10 | Hits | R@100 | Val. RMSE | Train RMSE |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| ALS | 10 | 0.03 | 0.0001 | 2 | 0.0021 | 2.089 | 0.363 |
+| ALS | 10 | 0.1 | 0.0001 | 4 | 0.0026 | 1.299 | 0.373 |
+| ALS | 10 | 0.3 | 0.0001 | 4 | 0.0037 | 1.185 | 0.686 |
+| ALS | 25 | 0.03 | 0.0003 | 8 | 0.0041 | 1.618 | 0.131 |
+| ALS | 25 | 0.1 | 0.0002 | 6 | 0.0034 | 1.226 | 0.284 |
+| ALS | 25 | 0.3 | 0.0001 | 3 | 0.0025 | 1.178 | 0.660 |
+| ALS (selected) | 50 | 0.03 | 0.0003 | 12 | 0.0057 | 1.408 | 0.089 |
+| ALS | 50 | 0.1 | 0.0002 | 5 | 0.0064 | 1.209 | 0.261 |
+| ALS | 50 | 0.3 | 0.0001 | 2 | 0.0032 | 1.180 | 0.652 |
+| Bias+ALS | 10 | 0.03 | 0.0001 | 5 | 0.0025 | 1.219 | 0.200 |
+| Bias+ALS | 10 | 0.1 | 0.0001 | 2 | 0.0034 | 1.146 | 0.347 |
+| Bias+ALS | 10 | 0.3 | 0.00004 | 2 | 0.0035 | 1.082 | 0.664 |
+| Bias+ALS | 25 | 0.03 | 0.0002 | 5 | 0.0054 | 1.130 | 0.103 |
+| Bias+ALS | 25 | 0.1 | 0.0003 | 7 | 0.0048 | 1.102 | 0.279 |
+| Bias+ALS | 25 | 0.3 | 0.0002 | 6 | 0.0035 | 1.077 | 0.644 |
+| Bias+ALS | 50 | 0.03 | 0.0001 | 4 | 0.0043 | 1.097 | 0.088 |
+| Bias+ALS (selected) | 50 | 0.1 | 0.0004 | 7 | 0.0042 | 1.086 | 0.262 |
+| Bias+ALS | 50 | 0.3 | 0.0002 | 3 | 0.0044 | 1.073 | 0.637 |
+
+For reference on the same cohort: bias-only 0.0002 (4 hits, validation RMSE 1.071, training RMSE
+0.874), popularity W=180 0.0078 (125 hits), oracle popularity 0.0122 (231 hits).
+
+Reading: explicit ALS ranks at about random level. The best trial (12 hits for 3.2 expected,
+p = 1.3e-4, about 0.002 after Bonferroni over 18 trials) is marginally above random and an order
+of magnitude below popularity W=180; the others are at random. The paired bootstrap intervals
+between the selected configuration and most others contain 0, so both selections are within noise.
+No configuration beats bias-only on validation RMSE (best 1.073 vs 1.071), training RMSE shows
+strong overfitting at low regularization, and the RMSE optimum lies on the upper edge of the grid,
+so the grid does not show whether stronger regularization would help RMSE.
+
+Checks: the selected ALS ranks the users' own training ratings >= 4 (seen items not excluded) at
+NDCG@10 0.092, about 290 times random, which rules out an index misalignment between factors and
+items. Its seen-excluded top 10 favors niche, highly rated items (median 12 training ratings, 34%
+of recommended items with fewer than 10, mean item rating 4.84, 7,131 distinct items), while
+popularity W=180 recommends 14 distinct items with a median of 62 ratings and a lower mean rating
+(3.69) and still hits ten times more often. Which item a user rates next follows exposure and
+recency, not how highly items are rated, and a model fitted only to observed ratings cannot see
+that. This matches Cremonesi, Koren and Turrin (RecSys 2010): rating-prediction models do poorly on
+top-N ranking. The user chose to report this as the result of the proposed experiment (option a);
+a wider regularization grid and implicit-feedback ALS were not run.
+
+## Final test results, four systems (frozen plan, 2026-10-25)
+
+Refit split `refit-c0cb58f463fb-k5-5` (train + validation up to 2020-11-17, 6,685,212 ratings,
+598,310 users, 175,550 items); settings frozen on the development split: popularity W=180,
+bias-only (regularization 10), ALS rank 50 / regularization 0.03, bias+ALS rank 50 /
+regularization 0.1, 10 iterations, 10/10 blocks. Refit times: ALS 68 s, bias+ALS 90 s; training
+RMSE 0.148 and 0.329. Standard test view, 44,612 known users; random expectation 7.1 users with
+a hit. No list is shorter than 100; every system predicts all 162,922 test ratings.
+
+| System | NDCG@10 [95% CI] | P@10 | Hit rate | Recall@100 | Hits / expected | p | RMSE |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Popularity W=180 | 0.0034 [0.0030, 0.0038] | 0.00093 | 0.93% | 0.028 | 415 / 7.1 | < 1e-10 | 1.263 |
+| Bias-only | 0.00007 [0.00003, 0.00011] | 0.00004 | 0.04% | 0.0018 | 17 / 7.1 | 0.001 | **1.151** |
+| ALS | 0.00015 [0.00009, 0.00022] | 0.00006 | 0.06% | 0.0021 | 27 / 7.1 | 1e-8 | 1.448 |
+| Bias+ALS | 0.00003 [0.00001, 0.00006] | 0.00002 | 0.02% | 0.0016 | 7 / 7.1 | 0.56 | 1.173 |
+| Popularity W=all (row) | 0.00004 [0.00001, 0.00008] | 0.00002 | 0.02% | 0.0017 | 7 / 7.1 | 0.56 | 1.263 |
+| Random (reference) | 0.000034 | | | 0.0006 | | | |
+| Oracle popularity (reference) | 0.0090 [0.0084, 0.0096] | 0.00257 | 2.53% | 0.055 | 1,128 / 7.1 | | |
+| Training global mean 4.270 (reference) | | | | | | | 1.355 |
+
+180-day horizon (21,613 users, 2.6 expected): popularity W=180 0.0054 (302 hits), ALS 0.00019
+(16 hits, p = 2e-8), bias+ALS 0.00007 (6 hits, p = 0.047, not significant after correction),
+bias-only 0 (0 hits), oracle 0.0158. ALS hits by training-item segment on the standard view:
+5-9 items 9 (2.4 expected), 10-49 items 14 (3.4), 50+ items 4 (1.3); popularity W=180: 203, 179
+and 33.
+
+Result: recent popularity is the best ranker by a wide margin. Explicit ALS, the best
+personalized model, is above random (p = 1e-8) but has 15 times fewer users with a hit than
+popularity W=180 (27 vs 415) and a 23 times lower NDCG@10; bias+ALS is at random level. About 30
+test p-values are reported: ALS and popularity W=180 survive a Bonferroni correction easily,
+bias-only's 17 hits (p = 0.0011) only barely (threshold about 0.0017). The small ALS lift is flat
+across training-item segments (about 3.7, 4.1 and 3.1 times random for 5-9, 10-49 and 50+ items),
+so the earlier hypothesis that it would concentrate on heavy users is not supported.
+
+Bias-only is the best rating predictor (RMSE 1.151 against 1.355 for the training global mean);
+bias+ALS (1.173) does not improve on it and popularity's smoothed item mean reaches 1.263. ALS's
+1.448, worse than the global mean, reflects the selection metric: the rule selects by NDCG@10,
+which picked the least regularized, most overfitted configuration; on development the most
+accurate explicit ALS (rank 50, regularization 0.3) reached 1.180, still above bias-only's 1.071,
+so no ALS trial improved on the biases there either. Test results agree qualitatively with the
+development grid; since the development selection was within noise, this shows the pattern is
+stable, not that the chosen settings are optimal. Explicit rating models do not beat recent
+popularity at top-N on this data, and they do not beat biases at rating prediction.
 
 ## First run on the real category
 
@@ -206,7 +523,7 @@ make prepare-fixture   # Create a run manifest for small synthetic inputs
 ```
 
 `make doctor` also inspects Java, so first set `JAVA_HOME` to Java 17 as above.
-Only `etl` and `sample` start Spark; no command contacts MongoDB. Use
+Only `etl`, `sample`, `split`, `train`, `evaluate` and `select-popularity-window` start Spark; no command contacts MongoDB. Use
 `.venv/bin/amazon-recommender --help` to list them.
 
 Edit `configs/local.toml` for a development run. Its `[experiment]` section
@@ -217,10 +534,8 @@ requires all users, 80/10/10, k=5, and relevance=4. This validates settings only
 it does not approve full-data execution. Lower the development k-core thresholds
 when exercising very small synthetic data later.
 
-The `[model]` section stores ALS/bias settings and bounded approximate retrieval
-settings. Initial shortlist size 200 and cap 1000 are editable development
-starting points, not measured recommendations or approved full-data budgets.
-Training and retrieval themselves are not implemented yet.
+The `[model]` section stores the popularity, bias and ALS settings, including the ALS block
+counts. Ranking is exact, so there are no retrieval budget settings.
 
 To prepare a run for your own existing local review/metadata files:
 
@@ -422,6 +737,8 @@ items outside the shortlist. Record candidate/expansion caps and counts, label
 recommendations and ranking results as approximate, and report any short lists
 caused by those caps. Ground truth and metric denominators remain unchanged.
 Verify retrieval limitations with exhaustive scores only on tiny fixtures.
+Superseded on 2026-10-25: the user approved exact full-catalog ranking instead (see the ALS
+section), so no recommendation is approximate.
 
 ## Approved evaluation/serving policy and deferred budget (P0.5)
 

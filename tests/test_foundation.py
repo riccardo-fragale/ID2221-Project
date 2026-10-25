@@ -52,7 +52,7 @@ class ConfigurationTests(unittest.TestCase):
             ('split = [0.8, 0.1, 0.1]', 'split = [0.8, 0.2, 0.2]'),
             ('split = [0.8, 0.1, 0.1]', 'split = [nan, 0.1, 0.1]'),
             ('bias_tolerance = 0.0001', 'bias_tolerance = nan'),
-            ('shortlist_cap = 1000', 'shortlist_cap = 10'),
+            ('num_user_blocks = 10', 'num_user_blocks = 0'),
         ]:
             with self.subTest(after=after), self.assertRaises(ValueError):
                 self.load_modified(before, after)

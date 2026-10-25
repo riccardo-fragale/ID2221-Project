@@ -23,9 +23,10 @@ class ModelConfig:
     bias_max_passes: int
     bias_tolerance: float
     popularity_smoothing: float
+    popularity_window_days: int | str  # "all" or a positive number of days
     recommendation_count: int
-    shortlist_size: int
-    shortlist_cap: int
+    num_user_blocks: int  # Spark ALS blocks; the factors depend on them (reproducible within tolerance)
+    num_item_blocks: int
 
 
 def _positive(value, name: str, *, integer: bool = False) -> None:
@@ -66,9 +67,9 @@ def parse_experiment(raw: dict) -> ExperimentConfig:
 
 
 def parse_model(raw: dict) -> ModelConfig:
-    integers = {"rank", "iterations", "bias_max_passes", "recommendation_count", "shortlist_size", "shortlist_cap"}
+    integers = {"rank", "iterations", "bias_max_passes", "recommendation_count", "num_user_blocks", "num_item_blocks"}
     for key, value in raw.items():
-        _positive(value, f"model.{key}", integer=key in integers)
-    if not raw["recommendation_count"] <= raw["shortlist_size"] <= raw["shortlist_cap"]:
-        raise ValueError("model must satisfy recommendation_count <= shortlist_size <= shortlist_cap")
+        if key == "popularity_window_days" and value == "all":
+            continue
+        _positive(value, f"model.{key}", integer=key in integers | {"popularity_window_days"})
     return ModelConfig(**raw)
