@@ -144,6 +144,22 @@ kept 1,300,010 users (achieved fraction 0.19990) and 3,431,067 interactions (20.
 also warm cache, in `samples/fraction-0.2-seed-2221/` (143 MB). These figures come from one run on one machine;
 they are not a scalability result.
 
+Split `p0.8-0.1-0.1-k5-5`, measured on 2026-10-25 (warm cache). Each sample derives its own
+cutoffs (P0.2 allows this), so the two validation windows are not the same time period:
+
+| Sample | Cutoffs (train / validation) | Train after k=5 | Users / items | Validation kept | Test kept | Test users (with rating >= 4) | Time |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 20% | 2018-12-21 / 2020-11-13 | 912,329 (33% of train window) | 88,251 / 47,491 | 18,524 (5.4%) | 8,575 (2.5%) | 3,924 (3,245) | 31 s |
+| 100% | 2018-12-25 / 2020-11-17 | 5,895,362 (43%) | 536,945 / 153,860 | 173,119 (10.1%) | 85,192 (5.0%) | 32,265 (26,713) | 111 s |
+
+Most held-out rows are lost because their user or item is unknown in the filtered training
+window: users who start reviewing after the cutoff, and users and items removed by the k-core.
+User sampling lowers every item's degree, so the 20% sample loses far more items than the full
+category. Development tuning uses only the 20% validation window (6,123 users with a relevant
+item; 7,239 in total), with a coarse grid and paired bootstrap intervals; the headline test is the
+full category. The development train graph is sparser than the full one, so tuned settings do
+not transfer exactly, especially the fixed bias regularization.
+
 ## Environment
 
 Read-only inspection of the adjacent `ID2221-labs` directory on 2026-10-23 found:

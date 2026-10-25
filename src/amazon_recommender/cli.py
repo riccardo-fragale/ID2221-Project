@@ -1,4 +1,4 @@
-"""Local pipeline commands. Only etl and sample start Spark; none contacts MongoDB."""
+"""Local pipeline commands. Only etl, sample and split start Spark; none contacts MongoDB."""
 
 import argparse
 from dataclasses import asdict, replace
@@ -30,6 +30,11 @@ def main(argv: list[str] | None = None) -> int:
     sample.add_argument("--config", type=Path, required=True)
     sample.add_argument("--run", type=Path, required=True, help="Run directory with a completed ETL stage")
     sample.add_argument("--user-fraction", type=float, help="Override experiment.user_fraction, e.g. for cohorts")
+    split = subcommands.add_parser("split", help="Temporal split, k-core and mappings of a sample; starts Spark")
+    split.add_argument("--config", type=Path, required=True, help="Spark resources; experiment settings come from the sample")
+    split.add_argument("--run", type=Path, required=True, help="Run directory with a completed sample")
+    split.add_argument("--sample", required=True, help="Sample label, e.g. fraction-0.2-seed-2221")
+    split.add_argument("--cutoffs-from", type=Path, help="Reuse the cutoffs of another split's stage.json")
     args = parser.parse_args(argv)
     if args.command == "doctor":
         report = inspect_environment()
@@ -53,6 +58,11 @@ def main(argv: list[str] | None = None) -> int:
                 experiment = {**asdict(config.experiment), "split": list(config.experiment.split)}
                 config = replace(config, experiment=parse_experiment({**experiment, "user_fraction": args.user_fraction}))
             print(run_sample(config, args.run) / "stage.json")
+            return 0
+        if args.command == "split":
+            from amazon_recommender.split import run_split
+
+            print(run_split(config, args.run, args.sample, cutoffs_from=args.cutoffs_from) / "stage.json")
             return 0
     except (OSError, ValueError, TypeError, tomllib.TOMLDecodeError) as exc:
         print(f"Invalid configuration or input: {exc}", file=sys.stderr)
