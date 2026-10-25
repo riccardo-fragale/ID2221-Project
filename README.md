@@ -58,9 +58,35 @@ read the paths listed in `outputs` (relative to the run directory). Sampling hap
 ETL, so ingestion is timed on the full input only; cohort timings start at the sample.
 Sampling happens before the split and k-core, as in the proposal. The sample is a
 development choice; results from different fractions are exploratory and do not show
-model improvements by themselves. Chronological split, k-core, and the integer mappings are next.
+model improvements by themselves.
 
-`make check` skips the Spark tests; `make check-spark` runs the ETL and sampling ones and needs Java 17.
+## Split stage (temporal split, k-core, mappings)
+
+`amazon-recommender split --config <config> --run storage/runs/<run-id> --sample <label> [--cutoffs-from <stage.json>]`
+requires a completed sample and starts Spark. The experiment settings (split proportions,
+`user_min_reviews`, `item_min_reviews`) come from the sample's `stage.json` config; the
+`--config` file only supplies Spark resources. Output: `<run>/samples/<label>/splits/<split-label>/`
+with `train/`, `validation/`, `test/`, `users/`, `items/` and `stage.json`, completed by rename.
+
+- One global chronological split by interaction count. With N interactions, the train cutoff
+  is the smallest timestamp whose cumulative count reaches `split[0] * N` (validation:
+  `(split[0] + split[1]) * N`). Train is `timestamp <= train cutoff`, so a group of equal
+  timestamps stays in one window, the earlier one; actual counts and proportions are recorded.
+- `--cutoffs-from` copies both cutoffs from another split's `stage.json` (label
+  `cutoffs-<sha>-k<u>-<i>`), to freeze common boundaries across cohorts.
+- Iterative k-core on training only, until every user and item reaches its threshold; each
+  pass is checkpointed and its removed users/items/interactions are recorded.
+  `converged_after` counts removal passes; the final check, which removes nothing, is not
+  counted. The session's checkpoint directory is deleted when the stage ends.
+- Validation and test keep rows whose user and item both survive in training. Drops are
+  counted as unknown user only, unknown item only, or both. Distinct held-out users and items
+  are also split into those never seen in training (cold starts) and those removed by the
+  k-core. `proportions` gives the train/validation/test shares after filtering.
+- Dense 0-based `user_index`/`item_index` in ascending order of the original ID, independent
+  of partitioning; `stage.json` records count, maximum index and a digest per mapping. All
+  three windows carry both indices.
+
+`make check` skips the Spark tests; `make check-spark` runs the ETL, sampling and split ones and needs Java 17.
 They passed on 2026-10-25 on synthetic data on the Linux machine (Ubuntu 24.04), which uses
 OpenJDK 17.0.20.1 selected through `JAVA_HOME`.
 
@@ -178,7 +204,7 @@ when exercising very small synthetic data later.
 The `[model]` section stores ALS/bias settings and bounded approximate retrieval
 settings. Initial shortlist size 200 and cap 1000 are editable development
 starting points, not measured recommendations or approved full-data budgets.
-Splitting, training, and retrieval themselves are not implemented yet.
+Training and retrieval themselves are not implemented yet.
 
 To prepare a run for your own existing local review/metadata files:
 
