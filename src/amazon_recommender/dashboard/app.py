@@ -68,9 +68,15 @@ def lookup_tab(database) -> None:
         st.info(f"{len(result.rows)} of {result.publication['k']} items: "
                 f"{document.get('short_list_reason') or 'no reason recorded'}.")
     if result.missing_titles:
-        st.info(f"{result.missing_titles} of {len(result.rows)} items have no title in the category metadata; "
-                "they are shown by parent_asin.")
-    st.dataframe(tables.recommendation_table(result.rows), hide_index=True, use_container_width=True)
+        st.info(f"{result.missing_titles} of {len(result.rows)} items have no title in the category metadata: "
+                f"{result.derived_labels} are described from their details (category, directors, cast), "
+                f"the others are shown by parent_asin.")
+    st.dataframe(tables.recommendation_table(result.rows), hide_index=True, use_container_width=True,
+                 column_config={
+                     "image": st.column_config.ImageColumn("image", help="Loaded from Amazon's image CDN"),
+                     "link": st.column_config.LinkColumn("link", display_text="amazon.com",
+                                                         help="amazon.com/dp/<parent_asin>; not verified"),
+                 })
 
 
 def definitions_section(definitions: dict) -> None:

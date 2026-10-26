@@ -1,4 +1,4 @@
-"""Local pipeline commands. Only etl, sample, split, train, recommend, materialize, evaluate,
+"""Local pipeline commands. Only etl, item-details, sample, split, train, recommend, materialize, evaluate,
 select-popularity-window, select-grid, benchmark and publish start Spark; only publish and dashboard
 contact MongoDB, and dashboard never starts Spark."""
 
@@ -30,6 +30,10 @@ def main(argv: list[str] | None = None) -> int:
     etl = subcommands.add_parser("etl", help="Run the ETL stage of a prepared run; starts Spark")
     etl.add_argument("--config", type=Path, required=True)
     etl.add_argument("--run", type=Path, required=True, help="Run directory created by init-run")
+    details = subcommands.add_parser("item-details",
+                                     help="Display fields of items from the run's raw metadata; starts Spark")
+    details.add_argument("--config", type=Path, required=True)
+    details.add_argument("--run", type=Path, required=True, help="Run directory created by init-run")
     sample = subcommands.add_parser("sample", help="Sample users of a run with a completed ETL stage; starts Spark")
     sample.add_argument("--config", type=Path, required=True)
     sample.add_argument("--run", type=Path, required=True, help="Run directory with a completed ETL stage")
@@ -71,6 +75,7 @@ def main(argv: list[str] | None = None) -> int:
     publish.add_argument("--config", type=Path, required=True, help="Spark resources and the [mongo] database")
     publish.add_argument("--serving", type=Path, required=True, help="<split>/serving/<model-label>")
     publish.add_argument("--metadata", type=Path, required=True, help="Item titles, e.g. <run>/etl/metadata")
+    publish.add_argument("--item-details", type=Path, help="Optional <run>/item_details for untitled items")
     dashboard = subcommands.add_parser("dashboard", help="Streamlit lookup and results of the active publication "
                                        "($MONGODB_URI); never starts Spark")
     dashboard.add_argument("--config", type=Path, required=True, help="The [mongo] database")
@@ -141,6 +146,11 @@ def main(argv: list[str] | None = None) -> int:
 
             print(run_etl(config, args.run) / "stage.json")
             return 0
+        if args.command == "item-details":
+            from amazon_recommender.item_details import run_item_details
+
+            print(run_item_details(config, args.run) / "stage.json")
+            return 0
         if args.command == "sample":
             from amazon_recommender.sample import run_sample
 
@@ -181,7 +191,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "publish":
             from amazon_recommender.publish import publish
 
-            print(publish(config, args.serving, args.metadata))
+            print(publish(config, args.serving, args.metadata, args.item_details))
             return 0
         if args.command == "dashboard":
             from amazon_recommender.publish import mongo_uri

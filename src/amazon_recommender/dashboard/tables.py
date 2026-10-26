@@ -82,5 +82,10 @@ def unmeasured_points(benchmark: dict) -> list[dict]:
 
 
 def recommendation_table(rows: list[dict]) -> list[dict]:
-    return [{"rank": row["rank"], "title": row["title"] + (" (no title in metadata)" if row["title_missing"] else ""),
-             "parent_asin": row["parent_asin"], "score": row["score"]} for row in rows]
+    def title(row):
+        if not row["title_missing"]:
+            return row["title"]
+        return row["title"] + (" (derived: no title in metadata)" if row["derived"] else " (no title in metadata)")
+
+    return [{"rank": row["rank"], "image": row["image"], "title": title(row), "parent_asin": row["parent_asin"],
+             "score": row["score"], "link": row["link"]} for row in rows]

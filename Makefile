@@ -7,7 +7,7 @@ check:
 	$(PYTHON) -m unittest discover -s tests -v
 
 check-spark:
-	RUN_SPARK_TESTS=1 PYSPARK_PYTHON=$(abspath $(PYTHON)) $(PYTHON) -m unittest tests.test_etl tests.test_sample tests.test_split tests.test_models tests.test_evaluate tests.test_benchmark tests.test_materialize -v
+	RUN_SPARK_TESTS=1 PYSPARK_PYTHON=$(abspath $(PYTHON)) $(PYTHON) -m unittest tests.test_etl tests.test_sample tests.test_split tests.test_models tests.test_evaluate tests.test_benchmark tests.test_materialize tests.test_item_details -v
 
 check-mongo:
 	RUN_MONGO_TESTS=1 PYSPARK_PYTHON=$(abspath $(PYTHON)) $(PYTHON) -m unittest tests.test_publish tests.test_dashboard -v

@@ -48,10 +48,12 @@ make check-spark     # Spark tests, about 4 min
 
 MongoDB has two setups:
 - **Intended setup:** the Compose service ([MongoDB section](#mongodb-recommended-development-setup):
-  `cp .env.example .env`, set a password, then `docker compose up -d mongodb`). It uses
-  `mongo:8.0`, which refuses to start on Linux kernel 6.19 and newer (SERVER-121912).
-- **Workaround used for every measured publication** (on kernel 7.0): an unauthenticated
-  `mongo:8.2.12` container bound to localhost. `compose.yaml` was not changed.
+  `cp .env.example .env`, set a password, then `docker compose up -d mongodb`). On 2026-10-26
+  `compose.yaml` moved from `mongo:8.0` to `mongo:8.2.12`, because 8.0 refuses to start on Linux
+  kernel 6.19 and newer (SERVER-121912). It has not been started on this host yet: Docker Compose
+  is not installed here (2026-10-26).
+- **Setup behind every measured publication** (on kernel 7.0): an unauthenticated `mongo:8.2.12`
+  container bound to localhost.
 
 ```bash
 docker run -d --name id2221-p7-test -p 127.0.0.1:27117:27017 --memory 1g --cpus 1 mongo:8.2.12
@@ -128,6 +130,7 @@ A=.venv/bin/amazon-recommender; C=configs/real.toml
 $A init-run --config $C --reviews data/raw/Movies_and_TV.jsonl --metadata data/raw/meta_Movies_and_TV.jsonl
 R=storage/runs/<run-id>                 # printed by init-run
 $A etl --config $C --run $R             # "ETL stage" figures
+$A item-details --config $C --run $R    # display fields for untitled items ("Item details stage")
 
 # Development: 20% sample (user_fraction in real.toml), its own cutoffs.
 $A sample --config $C --run $R          # fraction-0.2-seed-2221
@@ -173,7 +176,7 @@ $A materialize $T --model-label popularity-smoothing10-window_days180 \
   --fallback-label popularity-smoothing10-window_days180          # --batch-users 500000 (default)
 MONGODB_URI=mongodb://127.0.0.1:27117 $A publish --config $C \
   --serving $R/samples/fraction-1-seed-2221/splits/<refit label>/serving/popularity-smoothing10-window_days180 \
-  --metadata $R/etl/metadata
+  --metadata $R/etl/metadata --item-details $R/item_details
 make dashboard CONFIG=configs/real.toml
 ```
 
@@ -200,7 +203,9 @@ recorded.
 | `samples/fraction-1-seed-2221/` (both splits, test models, evaluations, 708 MB of serving lists) | 1.6 GB |
 | `benchmarks/fixed-resource-v1/` (kept outputs of three fractions) | 2.1 GB |
 | `benchmarks/probe-0.25/` | 402 MB |
-| MongoDB database `amazon_recommender` (one publication) | 8.3 GB of data uncompressed; 927 MB of storage plus 433 MB of indexes on disk |
+| `item_details/` (added later on 2026-10-26, not in the 5.4 GB total) | 46 MB |
+| MongoDB database `amazon_recommender`, one publication (measured before the second) | 8.3 GB of data uncompressed; 927 MB of storage plus 433 MB of indexes on disk |
+| The same database with both publications (`popularity_8918f91d1974` and `popularity_33f22baa8b00`), 2026-10-26 | 17.1 GB of data uncompressed; 1,855 MB of storage plus 874 MB of indexes on disk |
 
 The `.gz` files can be deleted after decompression; their checksums stay in `SHA256SUMS.gz.txt`.
 `benchmark --delete-outputs` keeps only the measurements.
@@ -257,9 +262,13 @@ Limitations:
   on this data. The k-core keeps 43% of the refit training rows, and most test rows belong to
   users or items unknown at training time.
 - **Titles:** 313,873 interaction items have no title in the category metadata, including 29
-  of the 30 published items. The dashboard shows their `parent_asin`.
-- **MongoDB:** the Compose image does not start on this kernel, and the measured publication
-  lives only in an unauthenticated throwaway container. The pointer's `source` is a
+  of the 30 published items. In the active publication (`popularity_33f22baa8b00`, with item
+  details), all 29 are shown with a derived label (category, directors and cast) marked as
+  derived. The label is not the real title.
+- **MongoDB:** the measured publication lives only in an unauthenticated throwaway container.
+  `compose.yaml` now uses `mongo:8.2.12` instead of the 8.0 image that fails on this kernel, but
+  the Compose service has not been started on this host (Docker Compose is not installed,
+  2026-10-26). The pointer's `source` is a
   machine-local absolute path, so the evidence tab only works on the machine that published.
 - **No cluster run:** `configs/full.example.toml` was never used.
 
@@ -316,6 +325,45 @@ changed (checksums are not recomputed), or if `etl/` already exists.
 - Identifiers are stored as read, without trimming.
 - Dense integer mappings are not created here: the approved protocol derives them from
   the training window after k-core filtering (split stage).
+
+## Item details stage
+
+`item-details --config C --run R` writes `<run>/item_details/`. For every metadata item it keeps
+the fields the dashboard uses to describe an untitled item. It reads the run's raw metadata file
+once more, and first re-checks its bytes and sha256 against `run.json`. ETL and its outputs are
+not changed, so no earlier result depends on this stage. It starts Spark, never contacts MongoDB,
+and refuses to overwrite a completed output.
+
+Contract (also recorded in `stage.json`):
+- **Columns:** `items/` holds parent_asin, main_category, directors, starring, studio, image and
+  rating_number.
+- **Details families:** raw `details` comes in two. Prime Video records have the lists
+  `Directors`, `Starring` and `Studio`. Physical editions have the strings `Director`, `Actors`
+  and `Studio`. The list is used if present and nonempty, else the string.
+- **Name splitting:** lists are never split, and strings are split on commas. In both, a suffix
+  token (Jr., Jr, Sr., Sr, II, III, IV, any case) is re-attached to the previous name. 591 raw
+  lists already arrive split that way, for example `["Robert Downey", "Jr.", ...]` (B083L8HVBX).
+  This is a heuristic: a name that itself contains a comma before a non-suffix part is split.
+- **Name cleanup:** names are whitespace-trimmed, deduplicated in order (ignoring case and spacing;
+  other characters are kept), and capped at 3 per field.
+- **Studio:** the first entry.
+- **Image:** the first `MAIN` image (else the first image), at 360w, else 480w, `large`, `thumb`.
+- **Duplicates:** an item listed twice keeps the row with the largest rating_number (nulls last),
+  then the smallest JSON of its fields.
+
+Measured on 2026-10-26 (run `20261025T093611Z-2b4b605ead0f`, `configs/real.toml`, one run):
+748,224 items from 748,224 rows, so there were no duplicates. Field coverage:
+
+| Field | Items |
+| --- | --- |
+| directors | 526,631 |
+| starring | 541,401 |
+| studio | 551,952 |
+| image | 748,023 |
+| main_category | 711,886 |
+| rating_number | 747,978 |
+
+It took 13.6 s, including 1.0 s to re-hash the input. The output is 46 MB.
 
 ## Sampling stage
 
@@ -906,6 +954,18 @@ record the publication in `publications` and switch the `active_run` pointer (`_
 time live in the pointer, not in the user documents. A missing title is stored as null, and the
 item falls back to its ID.
 
+`publish … --item-details <run>/item_details` also fills each item document with main_category,
+directors, starring, studio, image and rating_number, which are null when missing:
+- **Same-run check:** the stage must be a completed item-details stage of the same run, otherwise
+  publication refuses.
+- **Version:** the details stage's `stage.json` hash becomes part of `<version>`, so a publication
+  with details never shares collections with one without them, and republishing stays idempotent.
+- **Join:** details are left-joined to the published items, so the item count is unchanged. The
+  pointer records the details path, its hash and `items_without_details`.
+- **Validation:** 20 item documents, chosen by a seeded hash, are compared with their source rows.
+- **Without details:** item documents keep the exact `{_id, title}` shape, as in
+  `popularity_8918f91d1974`.
+
 Real-category materialization, 2026-10-26 (`configs/real.toml`, refit split
 `refit-c0cb58f463fb-k5-5`, model and fallback popularity W=180, the user's choice for serving; one run):
 6,503,429 users, equal to the sample's users. 598,310 are known (rec_type model), 5,257,666 were
@@ -919,7 +979,8 @@ short list, the exact fallback order, an interrupted run that resumes, and one f
 audit rule. `make check-mongo` (`RUN_MONGO_TESTS=1`, `MONGODB_URI` set) round-trips a publication
 twice. On this Linux host (kernel 7.0) the Compose image `mongo:8.0` refuses to start
 ("Linux kernel versions 6.19 and newer has a known incompatibility", SERVER-121912). The tests
-passed against a throwaway `mongo:8.2.12` container. `compose.yaml` is unchanged.
+passed against a throwaway `mongo:8.2.12` container. `compose.yaml` was unchanged then (since then:
+it uses `mongo:8.2.12`, see the MongoDB section).
 
 The throwaway container has no authentication and listens only on localhost. It keeps its data in
 anonymous volumes (the original container used the floating tag `mongo:8.2`, then 8.2.12), so `docker stop`/`docker start` preserve the data and `docker rm -v` deletes it:
@@ -944,7 +1005,26 @@ Parquet and found no difference. Then `active_run` ("current") was switched to t
 category metadata (the ETL counts 313,873 interaction items without a title), so the dashboard
 will show their `parent_asin`. The record is in `<serving>/publications/` and in the `publications` collection, and `source` in the
 pointer is an absolute local path. The publication exists only in the throwaway container, not
-in the Compose MongoDB. If the container is removed, rerun `publish`.
+in the Compose MongoDB. If the container is removed, rerun `publish`. (Since then, the second
+publication below replaced it as the active one. Its collections are kept.)
+
+Publication with item details, 2026-10-26 (the same materialization, metadata and container,
+`--item-details <run>/item_details`; one run): version `popularity_33f22baa8b00`, collections
+`recommendations_popularity_33f22baa8b00` and `items_popularity_33f22baa8b00`.
+- **Documents:** 6,503,429 user documents and 30 item documents, with no item missing from
+  item details (`items_without_details` 0).
+- **Validation:** 60 seeded user documents and 20 item documents matched their source rows.
+- **Derived labels:** all 29 untitled items have directors or cast, so all 29 get a derived
+  label in the dashboard. This was measured on the published items collection. For example,
+  B081W544J7 is shown as "Prime Video · dir. Rian Johnson · Daniel Craig, Chris Evans, Jamie Lee
+  Curtis".
+- **Pointer:** `active_run` switched to this version (published_at 15:08:52 UTC). It records the
+  item-details path and stage hash.
+- **Timings:** 271 s of wall time including Spark start: 238 s for the user documents, 2.1 s for
+  the items and 27 s for the validation. The user documents took 166 s in the first publication;
+  this is one run each, so the difference is not attributed.
+- **Kept:** the collections of `popularity_8918f91d1974` remain, and the record is in
+  `<serving>/publications/popularity_33f22baa8b00-2026-10-26T150852.797774+0000.json`.
 
 ## Dashboard (P8)
 
@@ -961,7 +1041,14 @@ case-sensitive. Each lookup works like this:
   the next lookup, and one lookup never mixes two versions.
 - It shows the ranked items with title, `parent_asin` and score, plus the publication's version,
   model, fallback and run, and the user's `rec_type`/`user_type`.
-- Items without a title are shown by `parent_asin`, with a count of how many are affected.
+- An item without a title gets a derived label when the publication has item details:
+  "Prime Video · dir. Rian Johnson · Daniel Craig, Chris Evans, Jamie Lee Curtis", from category,
+  directors and cast. It is marked "(derived: no title in metadata)". An item with neither
+  directors nor cast (or from a publication without details) is shown by `parent_asin`, marked
+  "(no title in metadata)". An info line counts both kinds.
+- The table also shows the item's image and a link to `amazon.com/dp/<parent_asin>`. The viewer's
+  browser loads each image directly from Amazon's image CDN, which is an external request at view
+  time, and the URLs may expire. The link is a convenience and is not verified for every item.
 
 It also has explicit states for an empty ID, no active publication, an unknown user, a short or
 empty list (with `short_list_reason`), and MongoDB being unreachable (2 s server-selection
@@ -1015,7 +1102,8 @@ into a temporary directory and has 70 users and 40 items:
 - 50 users become known;
 - 10 are removed by the k-core;
 - 10 appear only in the test window;
-- 4 items have no title.
+- 4 items have no title. Three of them carry raw details (both families, a split "Jr.", images
+  of each shape) and one has none.
 
 The test (`tests/test_e2e.py`) uses a copy of `configs/local.toml` whose `storage_root` is the
 temporary directory and whose database is a temporary `test_e2e_<uuid>`. That database is dropped
@@ -1026,6 +1114,7 @@ in this order (keep the two lists in step):
 C=<profile>; R=<run>; S=fraction-1-seed-2221
 amazon-recommender init-run --config $C --reviews reviews.jsonl --metadata metadata.jsonl
 amazon-recommender etl --config $C --run $R
+amazon-recommender item-details --config $C --run $R
 amazon-recommender sample --config $C --run $R
 amazon-recommender split --config $C --run $R --sample $S                     # p0.8-0.1-0.1-k5-5
 amazon-recommender split --config $C --run $R --sample $S --refit-from <split>/stage.json
@@ -1037,7 +1126,8 @@ amazon-recommender train --config $C --run $R --sample $S --split $P --model bia
 amazon-recommender evaluate --config $C --run $R --sample $S --split $P --model-label <each model> --window test
 amazon-recommender materialize --config $C --run $R --sample $S --split $P \
   --model-label <als label> --fallback-label <popularity label> --batch-users 25
-amazon-recommender publish --config $C --serving <split>/serving/<als label> --metadata $R/etl/metadata
+amazon-recommender publish --config $C --serving <split>/serving/<als label> --metadata $R/etl/metadata \
+  --item-details $R/item_details
 ```
 
 It then checks the following:
@@ -1050,8 +1140,9 @@ It then checks the following:
   produces the same users and recommendations (hash) and the same coverage.
 - **Completed stages refuse to run again** (`train` exits 2) and leave their record unchanged.
 - **Publication:** the document count equals the coverage. A dashboard lookup returns 20 ranked
-  rows, with `parent_asin` in place of each missing title, plus fallback lists for removed and new
-  users and `unknown_user`. `load_evidence` finds the four systems in the test view, "no selection
+  rows. Untitled items carry the expected derived label, or `parent_asin` for the one without
+  details, plus the expected image and link. The other lookups return fallback lists for removed
+  and new users, and `unknown_user`. No published item lacks details. `load_evidence` finds the four systems in the test view, "no selection
   record" for each (no select-* stage runs here), and no problems.
 - **Repeated publication:** same version, and identical user and item documents, compared by a
   hash of all of them. The only field excluded is the pointer's `published_at`, which is the
@@ -1060,7 +1151,9 @@ It then checks the following:
 Selection stages and the benchmark are not part of the chain: they have their own tests. Measured on
 2026-10-26 (16-core host, `local[2]`, the throwaway Mongo container): 6 tests, 131.8 s of wall
 time, including 125 s for the chain. That is 16 CLI processes: train 32.9 s and evaluate 33.6 s
-in total, materialize 23.4 s for both runs, and publish 13.0 s for both.
+in total, materialize 23.4 s for both runs, and publish 13.0 s for both. With `item-details`
+added (17 processes), the same day: 143.8 s of wall time, 135.3 s for the chain, 5.7 s for
+item-details.
 
 ## First run on the real category
 
@@ -1269,7 +1362,7 @@ will continue to use Parquet for processing. A MongoDB document is a JSON-like
 record, a collection groups documents, and a database groups collections. The
 dashboard fetches a user's document by its original user ID (P8).
 
-The Compose service uses the Docker Official `mongo:8.0` image with a named
+The Compose service used the Docker Official `mongo:8.0` image (since 2026-10-26: `mongo:8.2.12`) with a named
 volume, localhost-only port, authentication, a health check, and limits of one
 CPU and 1 GB RAM. The image supports ARM64. Named volumes are recommended for
 MongoDB persistence on macOS
@@ -1278,7 +1371,10 @@ patch updates; freeze the resolved image digest before measured experiments.
 These MongoDB limits are initial fixture settings, subject to measurement.
 Since then: `mongo:8.0` refuses to start on Linux kernel 6.19 and newer (SERVER-121912), so every
 measured publication used the throwaway `mongo:8.2.12` container described in the P7 section, with
-the same 1 CPU / 1 GB limits. Whether to move `compose.yaml` to 8.2 is still open.
+the same 1 CPU / 1 GB limits. On 2026-10-26 `compose.yaml` was moved to `mongo:8.2.12`, the
+version that runs on this kernel. The Compose service itself has not been started on this host
+yet, because Docker Compose is not installed here, so its start and authentication are
+unverified.
 
 To start MongoDB when ready (this does not start Spark):
 

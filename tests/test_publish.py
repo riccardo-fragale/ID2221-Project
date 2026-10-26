@@ -12,7 +12,8 @@ from pymongo.errors import AutoReconnect
 
 from amazon_recommender.config import load_config
 from amazon_recommender.publish import (
-    ACTIVE_COLLECTION, collection_names, mongo_uri, publication_version, publish, user_document, write_batches,
+    ACTIVE_COLLECTION, collection_names, item_details_stage, item_document, mongo_uri, publication_version, publish,
+    user_document, write_batches,
 )
 
 
@@ -82,6 +83,29 @@ class PublisherLogicTests(unittest.TestCase):
                            ("completed_at", "2026-10-26T11:00:00+00:00")):
             self.assertNotEqual(version, publication_version({**stage, key: value}), key)
         self.assertEqual(collection_names(version)["recommendations"], f"recommendations_{version}")
+        with_details = publication_version(stage, "a" * 64)
+        self.assertNotIn(with_details, (version, publication_version(stage, "b" * 64)))
+        self.assertEqual(with_details, publication_version(dict(stage), "a" * 64))
+
+    def test_item_documents_keep_the_old_shape_without_details(self):
+        row = {"parent_asin": "a", "title": None, "main_category": "Prime Video", "directors": ("D",),
+               "starring": [], "studio": None, "image": "u", "rating_number": 5}
+        self.assertEqual(item_document(row, False), {"_id": "a", "title": None})
+        self.assertEqual(item_document(row, True), {"_id": "a", "title": None, "main_category": "Prime Video",
+                                                    "directors": ["D"], "starring": [], "studio": None,
+                                                    "image": "u", "rating_number": 5})
+
+    def test_item_details_must_be_a_completed_stage_of_the_same_run(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        path = Path(directory.name)
+        (path / "stage.json").write_text(json.dumps({"stage": "item-details", "status": "completed", "run_id": "r1"}))
+        self.assertEqual(item_details_stage(path, "r1")["run_id"], "r1")
+        with self.assertRaisesRegex(ValueError, "cannot be published with run r2"):
+            item_details_stage(path, "r2")
+        (path / "stage.json").write_text(json.dumps({"stage": "etl", "status": "completed", "run_id": "r1"}))
+        with self.assertRaisesRegex(ValueError, "not a completed item-details stage"):
+            item_details_stage(path, "r1")
 
     def test_missing_uri_fails_before_connecting(self):
         config = load_config(ROOT / "configs/local.toml")

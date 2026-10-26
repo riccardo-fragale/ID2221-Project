@@ -1,7 +1,7 @@
 name: id2221-recommender
 services:
   mongodb:
-    image: mongo:8.0
+    image: mongo:8.2.12  # 8.0 refuses to start on Linux kernel >= 6.19 (SERVER-121912)
     ports:
       - "127.0.0.1:27017:27017"
     environment:

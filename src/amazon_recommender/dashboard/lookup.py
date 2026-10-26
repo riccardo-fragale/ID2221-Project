@@ -31,26 +31,50 @@ class LookupResult:
     def missing_titles(self) -> int:
         return sum(row["title_missing"] for row in self.rows)
 
+    @property
+    def derived_labels(self) -> int:
+        return sum(row["derived"] for row in self.rows)
+
 
 def active_publication(database) -> dict | None:
     return database[ACTIVE_COLLECTION].find_one({"_id": ACTIVE_ID})
 
 
-def item_titles(collection, parent_asins: list[str]) -> dict:
+def item_documents(collection, parent_asins: list[str]) -> dict:
     """One query for all items of a list; items without a document are absent from the result."""
     if not parent_asins:
         return {}
-    return {item["_id"]: item.get("title") for item in collection.find({"_id": {"$in": list(parent_asins)}})}
+    return {item["_id"]: item for item in collection.find({"_id": {"$in": list(parent_asins)}})}
 
 
-def display_rows(items: list[dict], titles: dict) -> list[dict]:
-    """Ranked rows; an item without a title is shown by its parent_asin and flagged."""
+def derived_label(item: dict) -> str | None:
+    """A label like "Prime Video · dir. A, B · C, D" from published item details; None without directors or cast.
+
+    Older publications have no details fields, so their items get no derived label.
+    """
+    directors, starring = item.get("directors") or [], item.get("starring") or []
+    if not directors and not starring:
+        return None
+    parts = [item["main_category"]] if item.get("main_category") else []
+    if directors:
+        parts.append("dir. " + ", ".join(directors))
+    if starring:
+        parts.append(", ".join(starring))
+    return " · ".join(parts)
+
+
+def display_rows(items: list[dict], documents: dict) -> list[dict]:
+    """Ranked rows; an item without a title gets a derived label, else its parent_asin, and is flagged."""
     rows = []
     for item in sorted(items, key=lambda item: item["rank"]):
-        title = titles.get(item["parent_asin"])
+        asin = item["parent_asin"]
+        document = documents.get(asin) or {}
+        title = document.get("title")
         missing = not (isinstance(title, str) and title.strip())
-        rows.append({"rank": item["rank"], "title": item["parent_asin"] if missing else title,
-                     "parent_asin": item["parent_asin"], "score": item["score"], "title_missing": missing})
+        derived = derived_label(document) if missing else None
+        rows.append({"rank": item["rank"], "title": derived or asin if missing else title, "parent_asin": asin,
+                     "score": item["score"], "title_missing": missing, "derived": derived is not None,
+                     "image": document.get("image"), "link": f"https://www.amazon.com/dp/{asin}"})
     return rows
 
 
@@ -66,5 +90,5 @@ def lookup_user(database, user_id: str) -> LookupResult:
     if document is None:
         return LookupResult(UNKNOWN_USER, user_id, publication)
     items = document.get("items") or []
-    titles = item_titles(database[publication["items"]], [item["parent_asin"] for item in items])
-    return LookupResult(OK, user_id, publication, document, display_rows(items, titles))
+    documents = item_documents(database[publication["items"]], [item["parent_asin"] for item in items])
+    return LookupResult(OK, user_id, publication, document, display_rows(items, documents))

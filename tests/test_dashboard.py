@@ -81,6 +81,33 @@ class LookupTests(unittest.TestCase):
                          [("a", True), ("b", True), ("c", True)])
         self.assertEqual(tables.recommendation_table(rows)[0]["title"], "a (no title in metadata)")
 
+    def test_untitled_items_with_details_get_a_marked_derived_label(self):
+        database = database_with(users=[user("U1", [(1, "a", 3.0), (2, "b", 2.0), (3, "c", 1.0)])], items=[
+            {"_id": "a", "title": None, "main_category": "Prime Video", "directors": ["Rian Johnson"],
+             "starring": ["Daniel Craig", "Chris Evans"], "image": "https://img/a.jpg"},
+            {"_id": "b", "title": None, "main_category": "Prime Video", "directors": [], "starring": []},
+            {"_id": "c", "title": "Gamma", "directors": ["Ignored"]}])
+        result = lookup_user(database, "U1")
+        a, b, c = result.rows
+        self.assertEqual((a["title"], a["derived"], a["title_missing"], a["image"]),
+                         ("Prime Video · dir. Rian Johnson · Daniel Craig, Chris Evans", True, True, "https://img/a.jpg"))
+        self.assertEqual((b["title"], b["derived"], b["title_missing"]), ("b", False, True))  # category alone is not enough
+        self.assertEqual((c["title"], c["derived"]), ("Gamma", False))
+        self.assertEqual((result.missing_titles, result.derived_labels), (2, 1))
+        table = tables.recommendation_table(result.rows)
+        self.assertEqual([row["title"] for row in table],
+                         ["Prime Video · dir. Rian Johnson · Daniel Craig, Chris Evans (derived: no title in metadata)",
+                          "b (no title in metadata)", "Gamma"])
+        self.assertEqual(table[0]["link"], "https://www.amazon.com/dp/a")
+
+    def test_derived_label_parts_are_optional(self):
+        from amazon_recommender.dashboard.lookup import derived_label
+
+        self.assertEqual(derived_label({"directors": ["D"]}), "dir. D")
+        self.assertEqual(derived_label({"main_category": "Prime Video", "starring": ["S1", "S2"]}),
+                         "Prime Video · S1, S2")
+        self.assertIsNone(derived_label({"_id": "old", "title": None}))  # publication without details
+
     def test_short_and_empty_lists_keep_their_reason(self):
         database = database_with(users=[user("U1", [(1, "a", 1.0)], reason="catalog_exhausted"),
                                         user("U2", [], reason="catalog_exhausted")])
@@ -327,10 +354,14 @@ class MongoLookupTests(unittest.TestCase):
             database[ACTIVE_COLLECTION].insert_one(publication("t1", k=2))
             database["recommendations_t1"].insert_many([user("U1", [(2, "b", 1.0), (1, "a", 2.0)]),
                                                         user("U2", [(1, "a", 2.0)], reason="catalog_exhausted")])
-            database["items_t1"].insert_many([{"_id": "a", "title": "Alpha"}, {"_id": "b", "title": None}])
+            database["items_t1"].insert_many([
+                {"_id": "a", "title": "Alpha"},
+                {"_id": "b", "title": None, "main_category": "Prime Video", "directors": ["Rian Johnson"],
+                 "starring": ["Daniel Craig"], "studio": None, "image": "https://img/b.jpg", "rating_number": 5}])
             result = lookup_user(database, "U1")
-            self.assertEqual([(row["title"], row["title_missing"]) for row in result.rows],
-                             [("Alpha", False), ("b", True)])
+            self.assertEqual([(row["title"], row["title_missing"], row["derived"]) for row in result.rows],
+                             [("Alpha", False, False), ("Prime Video · dir. Rian Johnson · Daniel Craig", True, True)])
+            self.assertEqual(result.rows[1]["image"], "https://img/b.jpg")
             self.assertTrue(lookup_user(database, "U2").short_list)
             self.assertEqual(lookup_user(database, "nobody").status, UNKNOWN_USER)
         finally:

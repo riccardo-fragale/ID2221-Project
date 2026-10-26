@@ -1,5 +1,7 @@
 """Seeded synthetic category for the end-to-end test (P9.2), written as raw JSONL in the same
-fields and types as tests/fixtures/*.ndjson.
+fields and types as tests/fixtures/*.ndjson. Three of the four untitled items also carry raw
+metadata fields shaped like the real category's (main_category, rating_number, details in both
+families, images); the fourth has none, so the dashboard falls back to its parent_asin.
 
 Interactions are laid out in time phases, so the global 80/10/10 split and its refit
 (train + validation up to the validation cutoff) leave every user type of the serving view:
@@ -23,6 +25,25 @@ UNTITLED_ITEMS = 4
 EARLY_RATINGS, LATER_RATINGS = 8, 3
 START_MS = 1_420_070_400_000  # 2015-01-01
 MINUTE_MS = 60_000
+
+
+# Raw fields of the first three (untitled) items, and what the dashboard should show for each untitled item.
+DETAILS = [
+    {"main_category": "Prime Video", "rating_number": 120,
+     "details": {"Directors": ["Ada Park"], "Starring": ["Robert Downey, Jr.", "Bea Cole", "Cy Dunn", "Di Ek"],
+                 "Studio": ["North"]},
+     "images": [{"variant": "PT01", "360w": "https://img.example/side.jpg"},
+                {"variant": "MAIN", "360w": "https://img.example/e2e-00.jpg", "480w": "https://img.example/x.jpg"}]},
+    {"main_category": "Prime Video", "rating_number": 7, "details": {"Starring": ["Eve Fox"]},
+     "images": [{"variant": "MAIN", "480w": "https://img.example/e2e-01.jpg"}]},
+    {"main_category": "Movies & TV", "rating_number": 3,
+     "details": {"Director": "Gil Ho", "Actors": "Ian Jo, Jr., Kim Lu", "Studio": "South"},
+     "images": [{"variant": "MAIN", "thumb": "https://img.example/t.jpg", "large": "https://img.example/e2e-02.jpg",
+                 "hi_res": "https://img.example/h.jpg"}]},
+]
+LABELS = ["Prime Video · dir. Ada Park · Robert Downey, Jr., Bea Cole, Cy Dunn", "Prime Video · Eve Fox",
+          "Movies & TV · dir. Gil Ho · Ian Jo, Jr., Kim Lu", None]
+IMAGES = ["https://img.example/e2e-00.jpg", "https://img.example/e2e-01.jpg", "https://img.example/e2e-02.jpg", None]
 
 
 def item(n: int) -> str:
@@ -57,9 +78,12 @@ def generate(directory: Path, seed: int = 2221) -> dict:
     untitled = set(catalog[:UNTITLED_ITEMS])
     metadata = [{"parent_asin": asin, "title": None if asin in untitled else f"Synthetic Movie {asin[-2:]}"}
                 for asin in catalog]
+    for row, extra in zip(metadata, DETAILS):
+        row.update(extra)
     directory.mkdir(parents=True, exist_ok=True)
     reviews, items = directory / "reviews.jsonl", directory / "metadata.jsonl"
     reviews.write_text("".join(json.dumps(row, separators=(",", ":")) + "\n" for row in rows))
     items.write_text("".join(json.dumps(row, separators=(",", ":")) + "\n" for row in metadata))
     return {"reviews": reviews, "metadata": items, "users": {"core": core, "sparse": sparse, "late": late},
-            "untitled": sorted(untitled)}
+            "untitled": sorted(untitled), "labels": dict(zip(catalog, LABELS)),
+            "images": dict(zip(catalog, IMAGES))}

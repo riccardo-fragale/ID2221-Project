@@ -13,6 +13,11 @@ Input contract (from the materialize stage): a serving directory with `stage.jso
 `users/` (user_id, user_type, rec_type, approximate, unseen_items, length) and
 `recommendations/` (user_id, rank, parent_asin, score). Every `users/` row becomes one document,
 including users with an empty list.
+
+With `item_details` (a completed item-details stage of the same run), item documents also carry
+main_category, directors, starring, studio, image and rating_number; the stage's hash is part of
+the version, so a publication with details never shares collections with one without them.
+Without it, item documents are `{_id, title}` exactly as before.
 """
 
 from datetime import datetime, timezone
@@ -40,11 +45,13 @@ def mongo_uri(config: ProjectConfig) -> str:
     return uri
 
 
-def publication_version(stage: dict) -> str:
-    """Short key of one materialization: republishing it reuses its collections, any other source
-    (including a rematerialization with the same labels) gets new ones."""
+def publication_version(stage: dict, item_details_sha256: str | None = None) -> str:
+    """Short key of one materialization (and item-details stage, if any): republishing it reuses its
+    collections, any other source (including a rematerialization with the same labels) gets new ones."""
     source = "/".join(str(stage[key]) for key in ("run_id", "sample", "split", "model_label", "fallback_label", "k",
                                                    "completed_at"))
+    if item_details_sha256:
+        source += f"/item_details={item_details_sha256}"
     return f"{stage['model'].replace('-', '_')}_{hashlib.sha256(source.encode()).hexdigest()[:12]}"
 
 
@@ -67,6 +74,28 @@ def user_document(row, version: str, k: int) -> dict:
             for item in items
         ],
     }
+
+
+ITEM_FIELDS = ("main_category", "directors", "starring", "studio", "image", "rating_number")
+
+
+def item_document(row, with_details: bool) -> dict:
+    document = {"_id": row["parent_asin"], "title": row["title"]}
+    if with_details:
+        document.update({field: (list(row[field]) if field in ("directors", "starring") and row[field] is not None
+                                 else row[field]) for field in ITEM_FIELDS})
+    return document
+
+
+def item_details_stage(directory: Path, run_id: str) -> dict:
+    """The stage.json of a completed item-details stage of `run_id`, with its sha256."""
+    path = Path(directory).resolve(strict=True) / "stage.json"
+    stage = json.loads(path.read_text())
+    if stage.get("stage") != "item-details" or stage.get("status") != "completed":
+        raise ValueError(f"{path.parent} is not a completed item-details stage")
+    if stage.get("run_id") != run_id:
+        raise ValueError(f"Item details of run {stage.get('run_id')} cannot be published with run {run_id}")
+    return {**stage, "path": str(path.parent), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
 
 
 def write_batches(collection, documents, *, batch_size: int = BATCH_SIZE, retries: int = RETRIES) -> int:
@@ -135,18 +164,35 @@ def validate(collection, lists, expected_users: int, version: str, k: int, seed:
                                      for t in sorted({row["user_type"] for row in sample})}}
 
 
-def publish(config: ProjectConfig, serving_directory: Path, metadata_directory: Path) -> Path:
+def validate_items(collection, items, with_details: bool, seed: int) -> dict:
+    """Compare a seeded sample of item documents with their source rows; count items without details."""
+    from pyspark.sql import functions as F
+
+    sample = items.orderBy(F.xxhash64(F.lit(seed), "parent_asin"), "parent_asin").limit(VALIDATION_SAMPLE).collect()
+    mismatches = sum(collection.find_one({"_id": row["parent_asin"]}) != item_document(row, with_details)
+                     for row in sample)
+    if mismatches:
+        raise RuntimeError(f"{mismatches} of {len(sample)} sampled item documents differ from the source rows")
+    without = items.filter(F.col("_in_details").isNull()).count() if with_details else None
+    return {"sampled_items_checked": len(sample), "items_without_details": without}
+
+
+def publish(config: ProjectConfig, serving_directory: Path, metadata_directory: Path,
+            item_details: Path | None = None) -> Path:
     """Publish one materialization and switch the active-run pointer. Starts Spark."""
     serving_directory = Path(serving_directory).resolve(strict=True)
     stage = json.loads((serving_directory / "stage.json").read_text())
     if stage.get("stage") != "materialize" or stage.get("status") != "completed":
         raise ValueError(f"{serving_directory} is not a completed materialize stage")
+    details = item_details_stage(item_details, stage["run_id"]) if item_details is not None else None
     uri = mongo_uri(config)
-    version = publication_version(stage)
+    version = publication_version(stage, details and details["sha256"])
     names = collection_names(version)
     k, users_expected = stage["k"], stage["counts"]["users"]
 
     from pymongo import MongoClient
+
+    from pyspark.sql import functions as F
 
     from amazon_recommender.etl import timed
     from amazon_recommender.spark.session import create_spark_session, describe_resources
@@ -166,15 +212,21 @@ def publish(config: ProjectConfig, serving_directory: Path, metadata_directory: 
                     lambda row: user_document(row, version, k))).sum()
             items = recommendations.select("parent_asin").distinct().join(
                 spark.read.parquet(str(Path(metadata_directory))).select("parent_asin", "title"), "parent_asin", "left")
+            if details:  # left join: an item without details keeps its document, with null fields
+                items = items.join(spark.read.parquet(str(Path(details["path"]) / details["outputs"]["items"]))
+                                   .select("parent_asin", *ITEM_FIELDS, F.lit(True).alias("_in_details")),
+                                   "parent_asin", "left")
+            with_details = details is not None
             with timed(timings, "write_items"):
                 items_written = items.rdd.mapPartitions(_partition_writer(
                     uri, config.mongo.database, names["items"],
-                    lambda row: {"_id": row["parent_asin"], "title": row["title"]})).sum()
+                    lambda row: item_document(row, with_details))).sum()
             with timed(timings, "validate"):
                 checks = validate(database[names["recommendations"]], lists, users_expected, version, k, config.seed)
                 item_documents = database[names["items"]].count_documents({})
                 if item_documents != items_written:
                     raise RuntimeError(f"{item_documents} item documents, {items_written} items written")
+                item_checks = validate_items(database[names["items"]], items, with_details, config.seed)
             resources = describe_resources(spark, config)
         finally:
             spark.stop()
@@ -186,6 +238,8 @@ def publish(config: ProjectConfig, serving_directory: Path, metadata_directory: 
             **{key: stage[key] for key in ("run_id", "sample", "split", "model", "model_label", "fallback_label")},
             "coverage": stage["coverage"],
             "source": str(serving_directory),
+            "item_details": {"path": details["path"], "stage_sha256": details["sha256"],
+                             "items_without_details": item_checks["items_without_details"]} if details else None,
         }
         database[PUBLICATIONS_COLLECTION].replace_one({"_id": version}, publication, upsert=True)
         # The pointer is switched last, after validation: readers see the old run until here.
@@ -203,7 +257,7 @@ def publish(config: ProjectConfig, serving_directory: Path, metadata_directory: 
         "source_stage_sha256": hashlib.sha256((serving_directory / "stage.json").read_bytes()).hexdigest(),
         "documents_written": written,
         "item_documents": items_written,
-        "validation": checks,
+        "validation": {**checks, "items": item_checks},
         "resources": resources,
         "timings_seconds": timings,
     }

@@ -102,6 +102,7 @@ class EndToEndTests(unittest.TestCase):
         run = cls.run_directory = cls.stage("init-run", "--config", config, "--reviews", cls.fixture["reviews"],
                                   "--metadata", cls.fixture["metadata"]).parent
         cls.stage("etl", "--config", config, "--run", run)
+        cls.details = cls.stage("item-details", "--config", config, "--run", run).parent
         sample = cls.stage("sample", "--config", config, "--run", run).parent.name
         split_stage = cls.stage("split", "--config", config, "--run", run, "--sample", sample)
         refit = cls.stage("split", "--config", config, "--run", run, "--sample", sample,
@@ -129,7 +130,7 @@ class EndToEndTests(unittest.TestCase):
         cls.resumed = {"stage": json.loads((serving / "stage.json").read_text()), "digest": serving_digest(serving)}
 
         cls.publication_record = cls.stage("publish", "--config", config, "--serving", serving,
-                                           "--metadata", run / "etl" / "metadata")
+                                           "--metadata", run / "etl" / "metadata", "--item-details", cls.details)
         cls.database = cls.client[cls.database_name]
 
     @classmethod
@@ -211,9 +212,18 @@ class EndToEndTests(unittest.TestCase):
         self.assertEqual(result.status, OK)
         self.assertEqual([row["rank"] for row in result.rows], list(range(1, K + 1)))
         for row in result.rows:
-            untitled = row["parent_asin"] in self.fixture["untitled"]
-            self.assertEqual(row["title_missing"], untitled)
-            self.assertEqual(row["title"], row["parent_asin"] if untitled else f"Synthetic Movie {row['parent_asin'][-2:]}")
+            asin = row["parent_asin"]
+            untitled = asin in self.fixture["untitled"]
+            label = self.fixture["labels"].get(asin)
+            self.assertEqual((row["title_missing"], row["derived"]), (untitled, label is not None))
+            self.assertEqual(row["title"], (label or asin) if untitled else f"Synthetic Movie {asin[-2:]}")
+            self.assertEqual(row["image"], self.fixture["images"].get(asin))
+            self.assertEqual(row["link"], f"https://www.amazon.com/dp/{asin}")
+        items = {item["_id"]: item for item in self.database[published["pointer"]["items"]].find()}
+        shown = {asin for asin in self.fixture["untitled"] if asin in items}
+        self.assertTrue(any(self.fixture["labels"][asin] for asin in shown), shown)  # a derived label is published
+        self.assertTrue(any(self.fixture["labels"][asin] is None for asin in shown), shown)  # and a bare one
+        self.assertEqual(published["pointer"]["item_details"]["items_without_details"], 0)
         for user_id in (self.fixture["users"]["sparse"][0], self.fixture["users"]["late"][0]):
             self.assertEqual(lookup_user(self.database, user_id).document["rec_type"], "fallback")
         self.assertEqual(lookup_user(self.database, "e2e-nobody").status, UNKNOWN_USER)
@@ -229,5 +239,5 @@ class EndToEndTests(unittest.TestCase):
     def test_repeated_publication_rewrites_identical_documents(self):
         before = self.published()
         self.stage("publish", "--config", self.config, "--serving", self.serving,
-                   "--metadata", self.run_directory / "etl" / "metadata")
+                   "--metadata", self.run_directory / "etl" / "metadata", "--item-details", self.details)
         self.assertEqual(self.published(), before)  # published_at is the only field allowed to change
