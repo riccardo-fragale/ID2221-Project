@@ -1,5 +1,5 @@
 # Approved local development topology, 2026-10-23.
-# Resource measurements and full-category execution remain pending.
+# Fixture and development profile; the measured full-category runs used configs/real.toml.
 profile = "local"
 seed = 2221
 storage_root = "../storage"

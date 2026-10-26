@@ -1,6 +1,6 @@
 # Single-machine profile for the real Movies and TV category (16 cores, 30 GB RAM host).
 # Resource values approved by the user for the real-category run on 2026-10-25.
-# Resource measurements and full-category execution remain pending.
+# Used for every measured result of run 20261025T093611Z-2b4b605ead0f (see README).
 profile = "local"
 seed = 2221
 storage_root = "../storage"

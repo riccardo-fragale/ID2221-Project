@@ -5,13 +5,293 @@ ID2221, Autumn 2026. The proposal specifies yearly Parquet storage, PySpark/Spar
 SQL, popularity/bias-only/plain ALS/bias+ALS comparisons, temporal evaluation,
 fixed-resource input scaling, MongoDB top-20 serving, and a Streamlit dashboard.
 
-The development foundation provides an installed Python package and lockfile,
-validated experiment settings, input/output schemas, run configuration/input
-snapshots, a non-starting environment check, an explicit Spark-session factory,
-a MongoDB Compose setup, and foundation tests. ETL, sampling, the split, the four systems
-(popularity, bias-only, ALS, bias+ALS), evaluation and the scalability benchmark runner are
-implemented; the quality and scalability results are below. Serving lists for every user and
-their MongoDB publication (P7) are implemented; the dashboard is still to be implemented.
+## Status (2026-10-26)
+
+All of this is implemented and has run on the full Movies and TV category in run
+`20261025T093611Z-2b4b605ead0f`:
+- ETL, sampling and the temporal split with k-core;
+- the four systems (popularity, bias-only, ALS, bias+ALS) and their evaluation, with model
+  selection on a 20% development sample and a test on the full category;
+- the 25/50/100% fixed-resource benchmark;
+- top-20 serving lists for every user and their MongoDB publication;
+- the Streamlit dashboard;
+- an end-to-end fixture test.
+
+The other run directory in `storage/` (`20261024T185657Z-3b25d5655ce0`) is an early ETL run on the
+4-row committed fixture. No table comes from it.
+
+The first sections below are for delivery: setup, data, reproduction, storage, findings and
+limitations. The sections after "Stage reference" document each stage, its contract and its
+dated measurements in the order they were built. Some of them record decisions that were later
+changed, and those carry a "since then" note.
+
+## Quick start
+
+Prerequisites:
+- Linux (tested on kernel 7.0; macOS untested);
+- Python 3.11 (`.python-version`: 3.11.14);
+- [uv](https://docs.astral.sh/uv/);
+- Java 17 (`.sdkmanrc`: Temurin 17.0.13; any Java 17 works, the measured runs used 17.0.20.1);
+- Docker, for MongoDB only.
+
+`.env.example` is the template for the Compose MongoDB credentials (copy it to `.env`). Python
+never reads `.env`: the publisher and the dashboard take the connection string from `MONGODB_URI`.
+
+```bash
+uv sync --frozen                                     # .venv from uv.lock
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64  # or: sdk env (SDKMAN)
+export PATH="$JAVA_HOME/bin:$PATH"
+make doctor          # versions; starts nothing
+make check           # Python-only tests: no JVM, no database
+make check-spark     # Spark tests, about 4 min
+```
+
+MongoDB has two setups:
+- **Intended setup:** the Compose service ([MongoDB section](#mongodb-recommended-development-setup):
+  `cp .env.example .env`, set a password, then `docker compose up -d mongodb`). It uses
+  `mongo:8.0`, which refuses to start on Linux kernel 6.19 and newer (SERVER-121912).
+- **Workaround used for every measured publication** (on kernel 7.0): an unauthenticated
+  `mongo:8.2.12` container bound to localhost. `compose.yaml` was not changed.
+
+```bash
+docker run -d --name id2221-p7-test -p 127.0.0.1:27117:27017 --memory 1g --cpus 1 mongo:8.2.12
+export MONGODB_URI=mongodb://127.0.0.1:27117
+make check-mongo     # publisher and dashboard against MongoDB
+make check-e2e       # the whole pipeline on a synthetic category, about 2.5 min
+make dashboard CONFIG=configs/real.toml   # http://localhost:8501, shows the active publication
+```
+
+`make check-e2e` is the fixture workflow ([commands](#fixture-workflow-end-to-end-p92)). It
+needs no downloaded data. A fresh-checkout run is recorded below under "Delivery checks".
+
+## Dataset
+
+The data is the Amazon Reviews 2023 Movies and TV category: the review and item-metadata files,
+downloaded from the [official site](https://amazon-reviews-2023.github.io/). There is no
+download stage: fetch the files, record their checksums and decompress them. The pipeline reads
+the decompressed `.jsonl` copies, because gzip cannot be split
+([First run](#first-run-on-the-real-category)).
+
+```bash
+mkdir -p data/raw && cd data/raw
+curl -LO https://mcauleylab.ucsd.edu/public_datasets/data/amazon_2023/raw/review_categories/Movies_and_TV.jsonl.gz
+curl -LO https://mcauleylab.ucsd.edu/public_datasets/data/amazon_2023/raw/meta_categories/meta_Movies_and_TV.jsonl.gz
+sha256sum *.jsonl.gz > SHA256SUMS.gz.txt
+zcat Movies_and_TV.jsonl.gz > Movies_and_TV.jsonl
+zcat meta_Movies_and_TV.jsonl.gz > meta_Movies_and_TV.jsonl
+```
+
+The files we used have these sha256 values. The decompressed values are recorded by `init-run` in
+`run.json`. Upstream files may change, so compare before reusing any result:
+
+| File | Bytes | sha256 |
+| --- | --- | --- |
+| `Movies_and_TV.jsonl.gz` | | `b63c192d3382f1cda7a5a99b2c21e2f79760a5b2b58c887d9455fa4a12d49824` |
+| `meta_Movies_and_TV.jsonl.gz` | | `0afbb248ddb00c012c3e2c1e68505b7cd28b02a2c83fb4421ff0c71ad5a48b8d` |
+| `Movies_and_TV.jsonl` | 8,391,445,499 | `4eb7428d5f48baae5a7f1132ef556e6e98181b122085ac24b34b25e033c3130a` |
+| `meta_Movies_and_TV.jsonl` | 1,285,744,674 | `beb82feef266bfa6d2e279903fd823a8b3b9c065059e1048226d0b74dc16b47d` |
+
+The site states no license; it shows "Copyright © 2024, McAuley Lab". Citation, as given on the
+site:
+
+```bibtex
+@article{hou2024bridging,
+  title={Bridging Language and Items for Retrieval and Recommendation},
+  author={Hou, Yupeng and Li, Jiacheng and He, Zhankui and Yan, An and Chen, Xiusi and McAuley, Julian},
+  journal={arXiv preprint arXiv:2403.03952},
+  year={2024}
+}
+```
+
+## Configuration profiles
+
+- **`configs/local.toml`:** fixture and development profile (`local[2]`, 2 GB). The tests and
+  `make check-e2e` derive their configs from it.
+- **`configs/real.toml`:** the single-machine profile used for every measured result (`local[8]`,
+  12 GB driver, 64 shuffle partitions, event log on, `user_fraction = 0.2`). It is committed and
+  holds no secrets. On another host, copy it and adapt `[spark]`
+  ([First run](#first-run-on-the-real-category)). Timings are only comparable on the same host and
+  resources.
+- **`configs/full.example.toml`:** a template for a cluster profile (`purpose = "final"`, cluster
+  master and shared storage to be filled in). It was never run: all results come from
+  `real.toml` in local mode.
+
+## Reproducing the experiment tables
+
+Each stage refuses to overwrite a completed output, and each prints the `stage.json` it wrote.
+Labels follow from the parameters, except the refit split's label, which hashes the source split's
+`stage.json` (`refit-<sha>-k5-5`). Use the label the command prints. The commands below are the
+ones behind the tables of run `20261025T093611Z-2b4b605ead0f`, rebuilt from its stage records.
+
+```bash
+A=.venv/bin/amazon-recommender; C=configs/real.toml
+$A init-run --config $C --reviews data/raw/Movies_and_TV.jsonl --metadata data/raw/meta_Movies_and_TV.jsonl
+R=storage/runs/<run-id>                 # printed by init-run
+$A etl --config $C --run $R             # "ETL stage" figures
+
+# Development: 20% sample (user_fraction in real.toml), its own cutoffs.
+$A sample --config $C --run $R          # fraction-0.2-seed-2221
+$A split --config $C --run $R --sample fraction-0.2-seed-2221      # p0.8-0.1-0.1-k5-5
+D="--config $C --run $R --sample fraction-0.2-seed-2221 --split p0.8-0.1-0.1-k5-5"
+# Windows of selections/popularity-window.json:
+for W in 30 90 180 365 all; do $A train $D --model popularity --popularity-window-days $W; done
+$A train $D --model bias
+# Grid of selections/als.json and bias-als.json (3 ranks x 3 regularizations, 10 iterations):
+for M in als bias-als; do for K in 10 25 50; do for L in 0.03 0.1 0.3; do
+  $A train $D --model $M --rank $K --regularization $L --iterations 10; done; done; done
+for L in oracle-popularity $(ls $R/samples/fraction-0.2-seed-2221/splits/p0.8-0.1-0.1-k5-5/models); do
+  $A evaluate $D --model-label $L --window validation; done
+for L in oracle-popularity bias-regularization10-max_passes10-tolerance0.0001 popularity-smoothing10-window_days180; do
+  $A evaluate $D --model-label $L --window validation --horizon-days 180; done
+for L in oracle-popularity popularity-smoothing10-window_days180; do
+  $A evaluate $D --model-label $L --window validation --coverage; done
+$A select-popularity-window $D          # chose W=180
+$A select-grid $D --model als           # chose rank 50, regularization 0.03
+$A select-grid $D --model bias-als      # chose rank 50, regularization 0.1
+
+# Full category: all users, refit on train + validation, frozen settings, test window.
+$A sample --config $C --run $R --user-fraction 1                   # fraction-1-seed-2221
+F="--config $C --run $R --sample fraction-1-seed-2221"
+$A split $F                                                        # p0.8-0.1-0.1-k5-5
+$A split $F --refit-from $R/samples/fraction-1-seed-2221/splits/p0.8-0.1-0.1-k5-5/stage.json
+T="$F --split <refit label>"            # was refit-c0cb58f463fb-k5-5
+$A train $T --model popularity --popularity-window-days 180
+$A train $T --model popularity --popularity-window-days all
+$A train $T --model bias
+$A train $T --model als --rank 50 --regularization 0.03 --iterations 10
+$A train $T --model bias-als --rank 50 --regularization 0.1 --iterations 10
+for L in oracle-popularity $(ls $R/samples/fraction-1-seed-2221/splits/<refit label>/models); do
+  $A evaluate $T --model-label $L --window test
+  $A evaluate $T --model-label $L --window test --horizon-days 180; done
+for L in oracle-popularity popularity-smoothing10-window_days180 popularity-smoothing10-window_daysall; do
+  $A evaluate $T --model-label $L --window test --coverage; done
+                                        # "Final test results" table
+
+# Scalability: the benchmark and benchmark-report commands of the P6 section.
+# Serving and publication (P7), then the dashboard (P8):
+$A materialize $T --model-label popularity-smoothing10-window_days180 \
+  --fallback-label popularity-smoothing10-window_days180          # --batch-users 500000 (default)
+MONGODB_URI=mongodb://127.0.0.1:27117 $A publish --config $C \
+  --serving $R/samples/fraction-1-seed-2221/splits/<refit label>/serving/popularity-smoothing10-window_days180 \
+  --metadata $R/etl/metadata
+make dashboard CONFIG=configs/real.toml
+```
+
+Notes:
+- The development ALS models were trained before the block counts became settings. Their labels
+  have no `-user_blocks10-item_blocks10` suffix, while a rerun's labels have it. The block counts
+  were the same (Spark's default, 10).
+- ALS factors depend on partitioning, so a rerun reproduces the metrics within numerical tolerance,
+  not bit for bit (see "ALS and bias+ALS").
+- The table values come from these stage records. The dashboard's evidence tab reads them from the
+  same files.
+
+## Storage requirements
+
+Measured on 2026-10-26 with `du -sh` and MongoDB `dbStats`. Peak usage during the runs was not
+recorded.
+
+| Location | Size |
+| --- | --- |
+| `data/raw/`: reviews `.jsonl` 7.9 GB, its `.gz` 2.3 GB, metadata `.jsonl` 1.2 GB, its `.gz` 259 MB | 12 GB |
+| Run `20261025T093611Z-2b4b605ead0f`, total | 5.4 GB |
+| `etl/` (yearly Parquet) | 756 MB |
+| `samples/fraction-0.2-seed-2221/` (development split, 24 models, evaluations) | 633 MB |
+| `samples/fraction-1-seed-2221/` (both splits, test models, evaluations, 708 MB of serving lists) | 1.6 GB |
+| `benchmarks/fixed-resource-v1/` (kept outputs of three fractions) | 2.1 GB |
+| `benchmarks/probe-0.25/` | 402 MB |
+| MongoDB database `amazon_recommender` (one publication) | 8.3 GB of data uncompressed; 927 MB of storage plus 433 MB of indexes on disk |
+
+The `.gz` files can be deleted after decompression; their checksums stay in `SHA256SUMS.gz.txt`.
+`benchmark --delete-outputs` keeps only the measurements.
+
+## Findings
+
+Full category, test window of the refit split: 44,612 known users with a relevant item, top-10
+over 175,550 items. A uniformly random list would hit 7.1 of these users on average. These
+numbers are copied from "Final test results", which cites the stage records:
+
+| System (frozen settings) | NDCG@10 | Users with a hit | RMSE |
+| --- | --- | --- | --- |
+| Popularity W=180 | 0.0034 | 415 | 1.263 |
+| ALS (rank 50, reg 0.03) | 0.00015 | 27 | 1.448 |
+| Bias-only (λ=10) | 0.00007 | 17 | **1.151** |
+| Bias+ALS (rank 50, reg 0.1) | 0.00003 | 7 | 1.173 |
+| Oracle popularity (reference: ranks by the test window's own relevant ratings) | 0.0090 | 1,128 | |
+
+- **Ranking:** recent popularity is the best ranker by a wide margin. ALS is above random
+  (p = 1e-8) but far below popularity, and bias+ALS is at random level.
+- **Rating prediction:** bias-only predicts ratings best, ALS is worse than the training global
+  mean (1.355), and no ALS variant beats the biases.
+- **Development:** the development grid agrees qualitatively ("ALS and bias+ALS"). Development
+  numbers are never headline results.
+- **Scalability** (`fixed-resource-v1`, one run, local[8] on one 16-core host, warm cache): total
+  work grows from 186 s at 25% to 973 s at 100% (×5.2 for ×4 input). Exact ALS and bias+ALS
+  top-20 ranking takes 63% of the work at 100%, and it grows with users × items (×10.0 and ×12.2
+  for ×12.5). The split grows about linearly. Training grows less than linearly.
+- **Serving:** all 6,503,429 users have a 20-item list: 598,310 known users and 5,905,119
+  fallback users (5,257,666 removed by the k-core, 647,453 new). There are no short lists. The
+  served model is popularity W=180 for every user, the user's choice given the results above.
+
+## Limitations and departures from the proposal
+
+Approved departures, with links to where each was recorded:
+- **Popularity window W:** chosen on development
+  ([Popularity window](#popularity-window-test-time-refit-and-evaluation-approved-2026-10-25)).
+- **Test-time refit:** models for the test window are fitted on train + validation (P0.5
+  option b, same section).
+- **Exact full-catalog ranking** instead of the approved approximate shortlist (P0.4, see "ALS
+  and bias+ALS"). No recommendation is approximate. This is also what makes ALS top-20 the
+  dominant cost.
+- **Development data portion:** the 20% development sample derives its own cutoffs (P0.2
+  allows case-by-case portions).
+- **Serving:** popularity W=180 is served to every user, known ones included, so known users'
+  "model" lists are not personalized.
+
+Limitations:
+- **Scalability scope:** this is fixed-resource input scaling in Spark local mode on one host,
+  one run per point, warm cache. It is not distributed or worker-count speedup, and run-to-run
+  noise is not measured. MongoDB writes are not part of the benchmark, and publication was
+  timed once (197 s).
+- **Weak personalized models:** explicit-feedback ALS does not beat recent popularity at top-N
+  on this data. The k-core keeps 43% of the refit training rows, and most test rows belong to
+  users or items unknown at training time.
+- **Titles:** 313,873 interaction items have no title in the category metadata, including 29
+  of the 30 published items. The dashboard shows their `parent_asin`.
+- **MongoDB:** the Compose image does not start on this kernel, and the measured publication
+  lives only in an unauthenticated throwaway container. The pointer's `source` is a
+  machine-local absolute path, so the evidence tab only works on the machine that published.
+- **No cluster run:** `configs/full.example.toml` was never used.
+
+## Delivery checks (2026-10-26)
+
+**Fresh checkout, simulated.** The P9.2/P9.3 files were not yet committed, so the checkout was
+simulated by copying `git ls-files -co --exclude-standard` (commit d8cdfe6 plus the uncommitted,
+non-ignored files) into an empty directory. Nothing else was copied: no `.venv`, `storage/`,
+`data/` or `.env`. Run there on this host (Java 17.0.20.1, the throwaway MongoDB on port 27117):
+
+| Command | Result |
+| --- | --- |
+| `uv sync --frozen` | new `.venv` from `uv.lock` |
+| `make doctor` | exit 0, `"errors": []` |
+| `make check` | 106 tests OK (45 skipped: Spark/MongoDB gates) |
+| `make check-spark` | 66 tests OK, 178 s |
+| `make check-e2e` | 6 tests OK, 137 s (chain 129 s) |
+
+So the fixture workflow needs no untracked file, local data or existing environment. The
+full-data workflow also needs the downloaded files ([Dataset](#dataset)) and the disk measured
+in [Storage requirements](#storage-requirements) (12 GB raw + 5.4 GB run + 1.4 GB MongoDB at the
+end of the runs). It was not rerun from the copy.
+
+**Repository contents:**
+- `git ls-files` holds no data, storage, model, `.env` or key file, and no tracked file is larger
+  than 1 MB.
+- No tracked file contains an absolute `/home/...` path. The absolute paths live only in the
+  generated, ignored `run.json`/`stage.json` records and in the MongoDB pointer.
+- `README.md` is the only Markdown file tracked. `IMPLEMENTATION_PLAN.md` is ignored by `*.md`.
+- `configs/real.toml` is tracked on purpose: it is the measured profile and has no secrets.
+
+# Stage reference
 
 ## ETL stage
 
@@ -420,7 +700,8 @@ Contract approved by the user on 2026-10-25:
   refuses before starting if the config cannot reproduce them, and checks them again after each fit.
   There is no hyperparameter search.
 - `configs/real.toml` resources (`local[8]`, 12 GB driver, 64 shuffle partitions, event log on).
-- One repetition, labelled "single run". Warm cache, declared. MongoDB writes not measured (P7 pending).
+- One repetition, labelled "single run". Warm cache, declared. MongoDB writes not measured (P7 was
+  pending then; since then the one real publication was timed at 197 s, see P7).
 
 Measurement type: stage from materialized input.
 - **ETL** is not re-run. It is timed once at full input (`etl/stage.json`) and is not a scaling point.
@@ -726,15 +1007,70 @@ exception and without pyspark loaded. `make check-mongo` also looks up users in 
 `test_dashboard_<uuid>` database (dropped afterwards) and does a read-only lookup of a known and a
 new user on the active publication (`MONGO_TEST_DATABASE`, default `amazon_recommender`).
 
-## First run on the real category
+## Fixture workflow (end to end, P9.2)
 
-`configs/real.toml` is a per-machine profile and is gitignored. Create it from the committed
-local profile and adjust the resources to your host, then validate it:
+`make check-e2e` (needs Java 17 and `MONGODB_URI`) runs the whole pipeline through the real CLI
+on a small synthetic category. The data is generated with a fixed seed by `tests/e2e_fixture.py`
+into a temporary directory and has 70 users and 40 items:
+- 50 users become known;
+- 10 are removed by the k-core;
+- 10 appear only in the test window;
+- 4 items have no title.
+
+The test (`tests/test_e2e.py`) uses a copy of `configs/local.toml` whose `storage_root` is the
+temporary directory and whose database is a temporary `test_e2e_<uuid>`. That database is dropped
+afterwards, and the real `active_run` pointer is never touched. These are the commands it runs,
+in this order (keep the two lists in step):
 
 ```bash
-cp configs/local.toml configs/real.toml
-# Edit [spark] for your machine and set experiment.user_fraction = 0.2.
-.venv/bin/amazon-recommender validate-config --config configs/real.toml
+C=<profile>; R=<run>; S=fraction-1-seed-2221
+amazon-recommender init-run --config $C --reviews reviews.jsonl --metadata metadata.jsonl
+amazon-recommender etl --config $C --run $R
+amazon-recommender sample --config $C --run $R
+amazon-recommender split --config $C --run $R --sample $S                     # p0.8-0.1-0.1-k5-5
+amazon-recommender split --config $C --run $R --sample $S --refit-from <split>/stage.json
+P=<refit split>
+amazon-recommender train --config $C --run $R --sample $S --split $P --model popularity
+amazon-recommender train --config $C --run $R --sample $S --split $P --model bias
+amazon-recommender train --config $C --run $R --sample $S --split $P --model als --rank 4 --iterations 5
+amazon-recommender train --config $C --run $R --sample $S --split $P --model bias-als --rank 4 --iterations 5
+amazon-recommender evaluate --config $C --run $R --sample $S --split $P --model-label <each model> --window test
+amazon-recommender materialize --config $C --run $R --sample $S --split $P \
+  --model-label <als label> --fallback-label <popularity label> --batch-users 25
+amazon-recommender publish --config $C --serving <split>/serving/<als label> --metadata $R/etl/metadata
+```
+
+It then checks the following:
+- **The fixture is not degenerate:** every user type occurs, every known user has at least 20
+  unseen items and gets exactly 20, materialize uses 3 batches, and an untitled item is recommended.
+- **Serving lists:** each list has min(20, unseen) unique items ranked 1..n. Known users get the
+  model and the others the fallback, and every audit check is 0.
+- **Simulated interruption** (the last completed batch is deleted and the stage marked incomplete
+  again; nothing is killed): the rerun reuses the other batches, recomputes only that one, and
+  produces the same users and recommendations (hash) and the same coverage.
+- **Completed stages refuse to run again** (`train` exits 2) and leave their record unchanged.
+- **Publication:** the document count equals the coverage. A dashboard lookup returns 20 ranked
+  rows, with `parent_asin` in place of each missing title, plus fallback lists for removed and new
+  users and `unknown_user`. `load_evidence` finds the four systems in the test view, "no selection
+  record" for each (no select-* stage runs here), and no problems.
+- **Repeated publication:** same version, and identical user and item documents, compared by a
+  hash of all of them. The only field excluded is the pointer's `published_at`, which is the
+  publication time by design.
+
+Selection stages and the benchmark are not part of the chain: they have their own tests. Measured on
+2026-10-26 (16-core host, `local[2]`, the throwaway Mongo container): 6 tests, 131.8 s of wall
+time, including 125 s for the chain. That is 16 CLI processes: train 32.9 s and evaluate 33.6 s
+in total, materialize 23.4 s for both runs, and publish 13.0 s for both.
+
+## First run on the real category
+
+`configs/real.toml` is committed: it is the exact profile behind every measured result. For
+another host, copy it and adjust `[spark]`, then validate it:
+
+```bash
+cp configs/real.toml configs/myhost.toml
+# Edit [spark] for your machine; keep experiment.user_fraction = 0.2 for development.
+.venv/bin/amazon-recommender validate-config --config configs/myhost.toml
 ```
 
 In local mode the driver JVM does all the work. As a starting point, use about half the logical
@@ -843,7 +1179,8 @@ make prepare-fixture   # Create a run manifest for small synthetic inputs
 
 `make doctor` also inspects Java, so first set `JAVA_HOME` to Java 17 as above.
 Only `etl`, `sample`, `split`, `train`, `recommend`, `materialize`, `evaluate`, `select-popularity-window`,
-`select-grid`, `benchmark` and `publish` start Spark; only `publish` contacts MongoDB. Use
+`select-grid`, `benchmark` and `publish` start Spark; only `publish` and `dashboard` contact MongoDB,
+and `dashboard` never starts Spark. Use
 `.venv/bin/amazon-recommender --help` to list them.
 
 Edit `configs/local.toml` for a development run. Its `[experiment]` section
@@ -871,7 +1208,8 @@ copy, or download data. Large files take time to hash. Input paths are relative
 to the current working directory; configuration storage paths are relative to
 the configuration file. The JSON is marked `prepared`, not completed. Existing
 runs are never overwritten; an unfinished directory is not proof of a successful
-pipeline stage. Stage completion/reuse will be added with actual ETL stages.
+pipeline stage. (Since then: every stage writes a `stage.json` on completion and refuses to
+overwrite a completed output.)
 
 `schemas.py` defines raw review, clean interaction, metadata, integer mapping,
 and flat recommendation row schemas. Schema-only tests verify types without
@@ -880,7 +1218,7 @@ tiny invented records, not downloaded Amazon reviews.
 
 Development stays simple: no generic pipeline scheduler, retry framework, or
 automatic timing of every operation. Add real stage commands alongside their
-implementations; add coarse timings later where needed for the project report.
+implementations. (Since then: every stage records coarse `timings_seconds` in its `stage.json`.)
 
 To inspect the labs installation directly without creating a Spark session:
 
@@ -929,7 +1267,7 @@ Use the supplied Docker Compose service for initial development. MongoDB stores
 the precomputed recommendation lists, titles, and experiment summaries; Spark
 will continue to use Parquet for processing. A MongoDB document is a JSON-like
 record, a collection groups documents, and a database groups collections. The
-future dashboard will fetch a user's document by its original user ID.
+dashboard fetches a user's document by its original user ID (P8).
 
 The Compose service uses the Docker Official `mongo:8.0` image with a named
 volume, localhost-only port, authentication, a health check, and limits of one
@@ -938,6 +1276,9 @@ MongoDB persistence on macOS
 ([image documentation](https://hub.docker.com/_/mongo)). The `8.0` tag tracks
 patch updates; freeze the resolved image digest before measured experiments.
 These MongoDB limits are initial fixture settings, subject to measurement.
+Since then: `mongo:8.0` refuses to start on Linux kernel 6.19 and newer (SERVER-121912), so every
+measured publication used the throwaway `mongo:8.2.12` container described in the P7 section, with
+the same 1 CPU / 1 GB limits. Whether to move `compose.yaml` to 8.2 is still open.
 
 To start MongoDB when ready (this does not start Spark):
 
@@ -969,18 +1310,19 @@ To start MongoDB when ready (this does not start Spark):
    `down -v` deletes its data. Initialization credentials apply only when the
    volume is first created; editing `.env` does not change an existing password.
 
-The publisher (and later the dashboard) reads the URI from `MONGODB_URI`.
+The publisher and the dashboard read the URI from `MONGODB_URI`.
 Compose reads `.env` automatically; Python does not, so export this variable
 in the shell that runs those applications. Do not put credentials in TOML,
-logs, or Git. Separate application users and reader permissions will be added
-with the publisher/dashboard; the bootstrap administrator is for setup.
+logs, or Git. The bootstrap administrator is for setup. Separate application users and
+reader permissions were not added (the measured publication used the unauthenticated, localhost-only
+throwaway container); add them before any shared deployment.
 
 MongoDB Atlas is an option if teammates need a shared remote database later.
 Its free tier has roughly 0.5 GB of storage including indexes, so it is not a
 sensible default for millions of users with top-20 lists
 ([Atlas limits](https://www.mongodb.com/docs/atlas/reference/free-shared-limitations/)).
-We must measure document sizes and available disk before full publication.
-No MongoDB container has been started as part of this increment.
+Since then, measured: one full publication is 8.3 GB of data uncompressed and 1.36 GB on disk
+including indexes (see "Storage requirements").
 
 ## Approved preprocessing decisions (P0.2)
 
@@ -998,19 +1340,19 @@ highest-rating tie-break may favor positive ratings among tied duplicates.
 The user replaced the proposal's fixed 20% development sample with a data
 portion chosen case by case while testing. No fixed development percentage is
 required. Record the portion, selection method, seed, and dataset identity for
-each run so results are reproducible. The precise sampling contract will be
-resolved with P3.1; changing data portions does not establish model improvements.
+each run so results are reproducible. The precise sampling contract was
+resolved with P3.1 (see "Sampling stage"); changing data portions does not establish model improvements.
 
 Intermediate implementation tests may choose both their data portion and their
 split proportions or date cutoffs case by case; they are not required to use
 80/10/10 or share the final dataset's cutoffs. Record each run's split policy
 and actual boundaries, and use the same split for models compared within a run.
 Label these runs exploratory, separately from final evaluation. P0.2 is complete
-as a protocol decision; the split implementation remains pending.
+as a protocol decision. (Since then: the split is implemented, see "Split stage".)
 
 Before measured 25/50/100% scalability experiments, freeze a common set of
-temporal cutoffs for those comparisons. Their specific cutoffs and cohort
-construction will be resolved with the benchmark contract.
+temporal cutoffs for those comparisons. (Since then: the benchmark contract uses nested user
+samples, all split with the cutoffs of the 100% split, see P6.)
 
 ## Approved filtering and evaluation decisions (P0.3)
 
@@ -1037,8 +1379,8 @@ On 2026-10-23 the user approved these shared rules for all four systems:
   Fit these statistics on training only. The user approved `alpha=10` with
   the bias-fitting settings; record this value in each run.
 
-P0.3 is complete as a protocol decision. Filtering, prediction, evaluation,
-and their fixture tests remain to be implemented. The later P0.4 approval below
+P0.3 is complete as a protocol decision. (Since then: filtering, prediction, evaluation and
+their tests are implemented.) The later P0.4 approval below
 permits approximate bias+ALS retrieval while retaining these relevance sets,
 eligible users, and metric denominators.
 
@@ -1065,19 +1407,22 @@ section), so no recommendation is approximate.
 Freeze the chosen development dataset and split before final model selection.
 Select by validation NDCG@10, freeze hyperparameters, and fit all four systems on
 full-category training data before held-out test evaluation without retuning.
-Initially serve from the training-only model. Users without factors receive
+Initially serve from the training-only model (since then: the served lists come from the refit
+split, and the user chose popularity W=180 for every user, see P7). Users without factors receive
 labeled popularity fallbacks with seen items excluded; report fallback coverage
 separately from model-comparison metrics.
 
 Publish into run-specific collections, validate completeness, then switch an
 active-run pointer after successful publication. This policy is approved;
-the publisher is implemented (see the serving section); the dashboard is not.
+the publisher and the dashboard are implemented (P7, P8).
 
 The user approved fixture work only and explicitly deferred full-data hosting
 and experiment budgets. Tuning grids, benchmark repetitions, full-data memory,
 disk, and runtime limits still need approval before large jobs. Suggested grid
 values were not approved as executable defaults. This does not revoke the
-existing instruction not to start Spark.
+existing instruction not to start Spark. (Since then: the host and resources were approved on
+2026-10-25 ("First run on the real category"), the development grid was fixed the same day ("ALS
+and bias+ALS") and the benchmark contract too (P6); the full-category runs above followed.)
 
 ## Remaining experiment decisions
 
@@ -1086,6 +1431,8 @@ execution, resolve the host, resource limits, tuning grid, benchmark cohorts,
 cutoffs, and repetitions. Development sampling details remain for P3.1.
 P0.1/P0.5 retain open full-data budget gates; P0.2/P0.3/P0.4 record completed
 protocol decisions. No algorithm implementation is implied by these approvals.
+(Since then, all of these were resolved on 2026-10-25, as recorded in the sections above; no
+experiment decision is open.)
 
 Raw data, processed data, models, checkpoints, logs, credentials, and local
 Markdown handoff files are ignored. Keep project documentation in this README;
