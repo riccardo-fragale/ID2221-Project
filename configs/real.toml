@@ -1,0 +1,40 @@
+# Single-machine profile for the real Movies and TV category (16 cores, 30 GB RAM host).
+# Resource values approved by the user for the real-category run on 2026-10-25.
+# Resource measurements and full-category execution remain pending.
+profile = "local"
+seed = 2221
+storage_root = "../storage"
+
+[spark]
+master = "local[8]"
+driver_memory = "12g"
+shuffle_partitions = 64
+event_log_enabled = true
+
+[mongo]
+database = "amazon_recommender"
+uri_env = "MONGODB_URI"
+
+# ETL ignores user_fraction; it is the default fraction of `sample` (20% development users).
+# Override it per cohort with `sample --user-fraction`.
+[experiment]
+purpose = "exploratory"
+user_fraction = 0.2
+split = [0.8, 0.1, 0.1]
+user_min_reviews = 5
+item_min_reviews = 5
+relevant_rating = 4.0
+
+# One starting configuration, not an approved full-data tuning grid.
+[model]
+rank = 10
+regularization = 0.1
+iterations = 10
+bias_regularization = 10.0
+bias_max_passes = 10
+bias_tolerance = 0.0001
+popularity_smoothing = 10.0
+popularity_window_days = "all"  # or a positive number of days before the end of training
+recommendation_count = 20
+num_user_blocks = 10  # Spark ALS default; fixed so factors are comparable across runs
+num_item_blocks = 10

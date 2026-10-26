@@ -1,5 +1,5 @@
-"""Local pipeline commands. Only etl, sample, split, train, recommend, evaluate, select-popularity-window,
-select-grid and benchmark start Spark; none contacts MongoDB."""
+"""Local pipeline commands. Only etl, sample, split, train, recommend, materialize, evaluate,
+select-popularity-window, select-grid, benchmark and publish start Spark; only publish contacts MongoDB."""
 
 import argparse
 from dataclasses import asdict, replace
@@ -55,6 +55,20 @@ def main(argv: list[str] | None = None) -> int:
     recommend.add_argument("--sample", required=True)
     recommend.add_argument("--split", required=True)
     recommend.add_argument("--model-label", required=True, help="Directory name under <split>/models/")
+    materialize = subcommands.add_parser(
+        "materialize", help="Top-k serving lists in original IDs for every sample user, with fallbacks; starts Spark")
+    materialize.add_argument("--config", type=Path, required=True, help="Spark resources and model.recommendation_count")
+    materialize.add_argument("--run", type=Path, required=True)
+    materialize.add_argument("--sample", required=True)
+    materialize.add_argument("--split", required=True)
+    materialize.add_argument("--model-label", required=True, help="Served model, a directory under <split>/models/")
+    materialize.add_argument("--fallback-label", required=True,
+                             help="Popularity model under <split>/models/ for users without a model list")
+    materialize.add_argument("--batch-users", type=int, default=500_000, help="Users per restartable batch")
+    publish = subcommands.add_parser("publish", help="Publish a materialization to MongoDB ($MONGODB_URI); starts Spark")
+    publish.add_argument("--config", type=Path, required=True, help="Spark resources and the [mongo] database")
+    publish.add_argument("--serving", type=Path, required=True, help="<split>/serving/<model-label>")
+    publish.add_argument("--metadata", type=Path, required=True, help="Item titles, e.g. <run>/etl/metadata")
     evaluate = subcommands.add_parser("evaluate", help="Metrics of a trained model on a held-out window; starts Spark")
     evaluate.add_argument("--config", type=Path, required=True, help="Spark resources and bootstrap seed")
     evaluate.add_argument("--run", type=Path, required=True)
@@ -151,6 +165,17 @@ def main(argv: list[str] | None = None) -> int:
             from amazon_recommender.recommend import run_recommend
 
             print(run_recommend(config, args.run, args.sample, args.split, args.model_label) / "stage.json")
+            return 0
+        if args.command == "materialize":
+            from amazon_recommender.materialize import run_materialize
+
+            print(run_materialize(config, args.run, args.sample, args.split, args.model_label, args.fallback_label,
+                                  batch_users=args.batch_users) / "stage.json")
+            return 0
+        if args.command == "publish":
+            from amazon_recommender.publish import publish
+
+            print(publish(config, args.serving, args.metadata))
             return 0
         if args.command == "benchmark":
             from amazon_recommender.benchmark import run_benchmark

@@ -1,13 +1,16 @@
 PYTHON := .venv/bin/python
 CLI := .venv/bin/amazon-recommender
 
-.PHONY: check check-spark config doctor prepare-fixture
+.PHONY: check check-spark check-mongo config doctor prepare-fixture
 
 check:
 	$(PYTHON) -m unittest discover -s tests -v
 
 check-spark:
-	RUN_SPARK_TESTS=1 PYSPARK_PYTHON=$(abspath $(PYTHON)) $(PYTHON) -m unittest tests.test_etl tests.test_sample tests.test_split tests.test_models tests.test_evaluate tests.test_benchmark -v
+	RUN_SPARK_TESTS=1 PYSPARK_PYTHON=$(abspath $(PYTHON)) $(PYTHON) -m unittest tests.test_etl tests.test_sample tests.test_split tests.test_models tests.test_evaluate tests.test_benchmark tests.test_materialize -v
+
+check-mongo:
+	RUN_MONGO_TESTS=1 PYSPARK_PYTHON=$(abspath $(PYTHON)) $(PYTHON) -m unittest tests.test_publish -v
 
 config:
 	$(CLI) validate-config --config configs/local.toml

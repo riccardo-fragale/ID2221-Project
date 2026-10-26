@@ -10,8 +10,8 @@ validated experiment settings, input/output schemas, run configuration/input
 snapshots, a non-starting environment check, an explicit Spark-session factory,
 a MongoDB Compose setup, and foundation tests. ETL, sampling, the split, the four systems
 (popularity, bias-only, ALS, bias+ALS), evaluation and the scalability benchmark runner are
-implemented; the quality and scalability results are below. MongoDB publication and the
-dashboard are still to be implemented.
+implemented; the quality and scalability results are below. Serving lists for every user and
+their MongoDB publication (P7) are implemented; the dashboard is still to be implemented.
 
 ## ETL stage
 
@@ -589,6 +589,82 @@ top-20 bias (10.0 s against 5.9 s, about 70%). Short stages (under 15 s) can the
 between runs, and their ratios are the least reliable. The long stages (split, ALS training and the
 exact top-20) are the informative ones.
 
+## Serving lists and MongoDB publication (P7)
+
+`materialize --run R --sample S --split P --model-label M --fallback-label F [--batch-users N]` writes
+top-k serving lists (`model.recommendation_count`, 20) for every user of the sample, in original
+IDs, to `<split>/serving/<M>/`. It starts Spark and never contacts MongoDB.
+- Users are typed like the coverage view. `known` users are in the split mapping and get model M
+  (`rec_type` "model"). `removed_by_k_core` users have history up to the train cutoff but were
+  removed by the k-core. `new` users have none. Removed and new users, and any known user M returns
+  no list for, get the popularity fallback F (`rec_type` "fallback", P0.5). F must be a popularity model.
+- Seen items are the user's interactions up to the train cutoff, before the k-core, and are never
+  recommended. Both models rank the training catalog exactly, so every list has min(k, unseen
+  catalog items) entries. A shorter list can only mean the catalog ran out (`catalog_exhausted`).
+- Users are processed in batches of N consecutive serving indices (default 500,000). Each batch
+  is written, moved into place and then marked in `batches/`. After an interruption, rerunning
+  the same command reuses the completed batches. It refuses if the labels, k, N, or the
+  sample/split/model `stage.json` files changed (`plan.json`).
+- Outputs: `users/` (one row per user, empty lists included: user_type, rec_type, approximate,
+  unseen_items, length), `recommendations/` (user_id, rank, parent_asin, score) and `stage.json`.
+  `stage.json` holds the coverage audit. The stage fails if a user is duplicated, a length is not
+  min(k, unseen), ranks are not 1..n, an item repeats in a list, a score is missing or increases
+  with rank, a seen item is recommended, or the listed users differ from the sample's users.
+
+`publish --config C --serving <split>/serving/<M> --metadata <run>/etl/metadata` (needs `MONGODB_URI`)
+writes one document per `users/` row into `recommendations_<version>`, and the titles of the
+recommended items into `items_<version>`. `<version>` hashes the run, sample, split, labels, k
+and the materialization time, so republishing the same materialization rewrites identical
+documents in the same collections, and anything else gets new collections. A user document has
+`_id` (original user ID), `version`, `user_type`, `rec_type`, `approximate`, `short_list_reason`
+and the ordered `items` (rank, parent_asin, score). The publisher writes with bounded bulk
+upserts (1,000 per batch, 3 retries with backoff) and one client per Spark partition. It then
+checks the document count and 20 documents per user type (chosen by a seeded hash) against the Parquet. Only after that does it
+record the publication in `publications` and switch the `active_run` pointer (`_id`
+"current"), so readers never see a partial run. The model, labels, coverage and publication
+time live in the pointer, not in the user documents. A missing title is stored as null, and the
+item falls back to its ID.
+
+Real-category materialization, 2026-10-26 (`configs/real.toml`, refit split
+`refit-c0cb58f463fb-k5-5`, model and fallback popularity W=180, the user's choice for serving; one run):
+6,503,429 users, equal to the sample's users. 598,310 are known (rec_type model), 5,257,666 were
+removed by the k-core and 647,453 are new (both fallback). That gives 130,068,580 rows, no short
+or empty lists, and every audit check at 0. It took 308 s: 33 s for the user table, 14 batches
+of 9.3-14.8 s, and a 128 s audit. Output: 708 MB of Parquet. Serving popularity to known users
+means their "model" lists are not personalized; the dashboard must show the publication's model.
+
+Tests: `make check-spark` covers materialization on a fixture with all three user types, a
+short list, the exact fallback order, an interrupted run that resumes, and one failing case per
+audit rule. `make check-mongo` (`RUN_MONGO_TESTS=1`, `MONGODB_URI` set) round-trips a publication
+twice. On this Linux host (kernel 7.0) the Compose image `mongo:8.0` refuses to start
+("Linux kernel versions 6.19 and newer has a known incompatibility", SERVER-121912). The tests
+passed against a throwaway `mongo:8.2.12` container. `compose.yaml` is unchanged.
+
+The throwaway container has no authentication and listens only on localhost. It keeps its data in
+anonymous volumes (the original container used the floating tag `mongo:8.2`, then 8.2.12), so `docker stop`/`docker start` preserve the data and `docker rm -v` deletes it:
+
+```bash
+docker run -d --name id2221-p7-test -p 127.0.0.1:27117:27017 --memory 1g --cpus 1 mongo:8.2.12
+export MONGODB_URI=mongodb://127.0.0.1:27117
+make check-mongo   # the Makefile sets RUN_MONGO_TESTS=1
+```
+
+Real-category publication, 2026-10-26 (the materialization above, metadata
+`<run>/etl/metadata`, the throwaway container on port 27117, database `amazon_recommender`; one run):
+version `popularity_8918f91d1974`, collections `recommendations_popularity_8918f91d1974` and
+`items_popularity_8918f91d1974`. It wrote 6,503,429 user documents, equal to the materialized
+users, and 30 item documents. Every list draws from the same W=180 popularity ranking minus the
+user's seen items, so only 30 distinct items occur. Grouped by (user_type, rec_type), the documents
+match the materialization audit (598,310 known/model, 5,257,666 removed_by_k_core/fallback,
+647,453 new/fallback). The built-in check compared 60 seeded documents (20 per user type) with the
+Parquet and found no difference. Then `active_run` ("current") was switched to this version
+(published_at 12:42:47 UTC). It took 197 s including Spark start: 166 s for the user documents,
+1.6 s for the items and 24 s for the validation. 29 of the 30 items have no title in the
+category metadata (the ETL counts 313,873 interaction items without a title), so the dashboard
+will show their `parent_asin`. The record is in `<serving>/publications/` and in the `publications` collection, and `source` in the
+pointer is an absolute local path. The publication exists only in the throwaway container, not
+in the Compose MongoDB. If the container is removed, rerun `publish`.
+
 ## First run on the real category
 
 `configs/real.toml` is a per-machine profile and is gitignored. Create it from the committed
@@ -705,7 +781,8 @@ make prepare-fixture   # Create a run manifest for small synthetic inputs
 ```
 
 `make doctor` also inspects Java, so first set `JAVA_HOME` to Java 17 as above.
-Only `etl`, `sample`, `split`, `train`, `evaluate` and `select-popularity-window` start Spark; no command contacts MongoDB. Use
+Only `etl`, `sample`, `split`, `train`, `recommend`, `materialize`, `evaluate`, `select-popularity-window`,
+`select-grid`, `benchmark` and `publish` start Spark; only `publish` contacts MongoDB. Use
 `.venv/bin/amazon-recommender --help` to list them.
 
 Edit `configs/local.toml` for a development run. Its `[experiment]` section
@@ -831,7 +908,7 @@ To start MongoDB when ready (this does not start Spark):
    `down -v` deletes its data. Initialization credentials apply only when the
    volume is first created; editing `.env` does not change an existing password.
 
-The eventual Python publisher/dashboard will read the URI from `MONGODB_URI`.
+The publisher (and later the dashboard) reads the URI from `MONGODB_URI`.
 Compose reads `.env` automatically; Python does not, so export this variable
 in the shell that runs those applications. Do not put credentials in TOML,
 logs, or Git. Separate application users and reader permissions will be added
@@ -933,7 +1010,7 @@ separately from model-comparison metrics.
 
 Publish into run-specific collections, validate completeness, then switch an
 active-run pointer after successful publication. This policy is approved;
-the publisher and serving components are still unimplemented.
+the publisher is implemented (see the serving section); the dashboard is not.
 
 The user approved fixture work only and explicitly deferred full-data hosting
 and experiment budgets. Tuning grids, benchmark repetitions, full-data memory,
