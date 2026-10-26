@@ -1,10 +1,12 @@
 """Local pipeline commands. Only etl, sample, split, train, recommend, materialize, evaluate,
-select-popularity-window, select-grid, benchmark and publish start Spark; only publish contacts MongoDB."""
+select-popularity-window, select-grid, benchmark and publish start Spark; only publish and dashboard
+contact MongoDB, and dashboard never starts Spark."""
 
 import argparse
 from dataclasses import asdict, replace
 import json
 from pathlib import Path
+import subprocess
 import sys
 import tomllib
 
@@ -69,6 +71,10 @@ def main(argv: list[str] | None = None) -> int:
     publish.add_argument("--config", type=Path, required=True, help="Spark resources and the [mongo] database")
     publish.add_argument("--serving", type=Path, required=True, help="<split>/serving/<model-label>")
     publish.add_argument("--metadata", type=Path, required=True, help="Item titles, e.g. <run>/etl/metadata")
+    dashboard = subcommands.add_parser("dashboard", help="Streamlit lookup and results of the active publication "
+                                       "($MONGODB_URI); never starts Spark")
+    dashboard.add_argument("--config", type=Path, required=True, help="The [mongo] database")
+    dashboard.add_argument("--port", type=int, default=8501)
     evaluate = subcommands.add_parser("evaluate", help="Metrics of a trained model on a held-out window; starts Spark")
     evaluate.add_argument("--config", type=Path, required=True, help="Spark resources and bootstrap seed")
     evaluate.add_argument("--run", type=Path, required=True)
@@ -177,6 +183,13 @@ def main(argv: list[str] | None = None) -> int:
 
             print(publish(config, args.serving, args.metadata))
             return 0
+        if args.command == "dashboard":
+            from amazon_recommender.publish import mongo_uri
+
+            mongo_uri(config)  # fail here, not in the browser, if the URI is not set
+            app = Path(__file__).resolve().parent / "dashboard" / "app.py"
+            return subprocess.call([sys.executable, "-m", "streamlit", "run", str(app), "--server.port",
+                                    str(args.port), "--", "--config", str(args.config.resolve())])
         if args.command == "benchmark":
             from amazon_recommender.benchmark import run_benchmark
 

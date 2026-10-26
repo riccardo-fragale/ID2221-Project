@@ -665,6 +665,67 @@ will show their `parent_asin`. The record is in `<serving>/publications/` and in
 pointer is an absolute local path. The publication exists only in the throwaway container, not
 in the Compose MongoDB. If the container is removed, rerun `publish`.
 
+## Dashboard (P8)
+
+`amazon-recommender dashboard --config C [--port 8501]` (or `make dashboard CONFIG=C`, needs
+`MONGODB_URI`) starts Streamlit on `src/amazon_recommender/dashboard/app.py`. It reads MongoDB and
+saved JSON records only and never starts Spark. The CLI and the dashboard modules do not import
+pyspark, and a test checks this.
+
+**Recommendations tab.** Enter an original user ID. The ID is stripped of whitespace but is
+case-sensitive. Each lookup works like this:
+- It reads the `active_run` pointer once, fetches the user document from the
+  `recommendations_<version>` collection that pointer names, and fetches every title with one
+  `$in` query on the same version's `items_<version>`. A new publication is therefore picked up by
+  the next lookup, and one lookup never mixes two versions.
+- It shows the ranked items with title, `parent_asin` and score, plus the publication's version,
+  model, fallback and run, and the user's `rec_type`/`user_type`.
+- Items without a title are shown by `parent_asin`, with a count of how many are affected.
+
+It also has explicit states for an empty ID, no active publication, an unknown user, a short or
+empty list (with `short_list_reason`), and MongoDB being unreachable (2 s server-selection
+timeout). The MongoClient is cached per URI, and lookup results are not cached.
+
+**Experiment evidence tab.** Everything is read from records traced back from the pointer's
+`source`, the serving directory:
+1. Its `stage.json` names the run, sample and split.
+2. The run directory is accepted only if its `run.json` has the same run_id.
+3. Every record used must carry matching run/sample/split fields. Anything else is skipped and
+   listed under "Note".
+
+The tab shows:
+- **Four-system comparison (headline):** the standard `test` view, from every
+  `<split>/evaluations/test/*/stage.json` of the published split, with references last. The
+  label is built from the records ("full category (all users), purpose: exploratory, test
+  window, split …"). A row is marked "selected on development" when the params chosen in a
+  selection record of the same run are a subset of its params. Bias-only has no selection record
+  and is labelled so. Unmatched or ambiguous selections are stated, never guessed. The 180-day
+  horizon and coverage views are separate expanders.
+- **Metric definitions:** with k, relevance threshold, cohort counts and bootstrap settings taken
+  from the records.
+- **Development selections:** `<run>/samples/*/splits/*/selections/*.json`, labelled with their
+  sample's user fraction and the validation window. They are never shown in the headline table.
+- **Retention and coverage:** sample, split and k-core counts from the `stage.json` files, and
+  serving coverage from the materialization audit.
+- **Scalability:** every `<run>/benchmarks/*/report.json`, with its Spark resources, host,
+  cache state and repetitions next to the chart (work seconds per step and fraction). Steps
+  that were not measured are listed, and the saved `scaling.svg` is shown. A benchmark without
+  `report.json` (`probe-0.25`) is listed as not shown.
+
+Evidence is cached per (source, version). The `source` path is local to the machine that ran
+`publish`, so on another machine the tab says the records cannot be found.
+
+Dependency: `pyarrow==17.0.0` is pinned. Streamlit tables need pyarrow, and the lock had resolved
+26.0.0, which refuses to import with the pinned NumPy 1.26.4.
+
+Tests: `make check` runs the lookup states against a fake database and the evidence loader on a
+temporary record tree. That tree covers params matching, a foreign-run record, a misfiled
+selection, a benchmark from another run, a run_id mismatch and an unmeasured point. It also runs
+an `AppTest` smoke test in a subprocess, which shows MongoDB unreachable or no URI without an
+exception and without pyspark loaded. `make check-mongo` also looks up users in a temporary
+`test_dashboard_<uuid>` database (dropped afterwards) and does a read-only lookup of a known and a
+new user on the active publication (`MONGO_TEST_DATABASE`, default `amazon_recommender`).
+
 ## First run on the real category
 
 `configs/real.toml` is a per-machine profile and is gitignored. Create it from the committed
