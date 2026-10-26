@@ -46,22 +46,28 @@ make check           # Python-only tests: no JVM, no database
 make check-spark     # Spark tests, about 4 min
 ```
 
-MongoDB has two setups:
-- **Intended setup:** the Compose service ([MongoDB section](#mongodb-recommended-development-setup):
-  `cp .env.example .env`, set a password, then `docker compose up -d mongodb`). On 2026-10-26
-  `compose.yaml` moved from `mongo:8.0` to `mongo:8.2.12`, because 8.0 refuses to start on Linux
-  kernel 6.19 and newer (SERVER-121912). It has not been started on this host yet: Docker Compose
-  is not installed here (2026-10-26).
-- **Setup behind every measured publication** (on kernel 7.0): an unauthenticated `mongo:8.2.12`
-  container bound to localhost.
+MongoDB runs as the Compose service: `mongo:8.2.12`, authenticated, bound to 127.0.0.1:27017, with
+1 CPU and 1 GB ([MongoDB section](#mongodb-recommended-development-setup)). Docker Compose v2 is
+needed; on Ubuntu, `sudo apt install docker-compose-v2`. Verified on 2026-10-26 on kernel 7.0 with
+Docker Compose 2.40.3. Choose your own password and never commit `.env`:
 
 ```bash
-docker run -d --name id2221-p7-test -p 127.0.0.1:27117:27017 --memory 1g --cpus 1 mongo:8.2.12
-export MONGODB_URI=mongodb://127.0.0.1:27117
-make check-mongo     # publisher and dashboard against MongoDB
+cp .env.example .env            # then set MONGO_INITDB_ROOT_PASSWORD in .env (it is gitignored)
+docker compose up -d mongodb    # healthy after about 15 s
+set -a; . ./.env; set +a        # load the two MONGO_INITDB_ROOT_* values into this shell
+export MONGODB_URI="mongodb://$MONGO_INITDB_ROOT_USERNAME:$(.venv/bin/python -c "import os, urllib.parse; print(urllib.parse.quote_plus(os.environ['MONGO_INITDB_ROOT_PASSWORD']))")@127.0.0.1:27017/?authSource=admin"
+make check-mongo     # publisher and dashboard; the tests create and drop their own databases
 make check-e2e       # the whole pipeline on a synthetic category, about 2.5 min
 make dashboard CONFIG=configs/real.toml   # http://localhost:8501, shows the active publication
 ```
+
+The password is URL-encoded into the URI and is never printed. The tests create temporary
+`test_*` databases and drop them again, which the root user from `.env` is allowed to do.
+
+Historical kernel workaround: before Compose was moved to 8.2.12, the measured runs used an
+unauthenticated throwaway container, `docker run -d --name id2221-p7-test -p
+127.0.0.1:27117:27017 --memory 1g --cpus 1 mongo:8.2.12` with
+`MONGODB_URI=mongodb://127.0.0.1:27117`. It is no longer needed.
 
 `make check-e2e` is the fixture workflow ([commands](#fixture-workflow-end-to-end-p92)). It
 needs no downloaded data. A fresh-checkout run is recorded below under "Delivery checks".
@@ -206,6 +212,7 @@ recorded.
 | `item_details/` (added later on 2026-10-26, not in the 5.4 GB total) | 46 MB |
 | MongoDB database `amazon_recommender`, one publication (measured before the second) | 8.3 GB of data uncompressed; 927 MB of storage plus 433 MB of indexes on disk |
 | The same database with both publications (`popularity_8918f91d1974` and `popularity_33f22baa8b00`), 2026-10-26 | 17.1 GB of data uncompressed; 1,855 MB of storage plus 874 MB of indexes on disk |
+| Compose MongoDB, database `amazon_recommender` with `popularity_33f22baa8b00` only, 2026-10-26 | 8.7 GB of data uncompressed; 928 MB of storage plus 416 MB of indexes on disk |
 
 The `.gz` files can be deleted after decompression; their checksums stay in `SHA256SUMS.gz.txt`.
 `benchmark --delete-outputs` keeps only the measurements.
@@ -265,11 +272,9 @@ Limitations:
   of the 30 published items. In the active publication (`popularity_33f22baa8b00`, with item
   details), all 29 are shown with a derived label (category, directors and cast) marked as
   derived. The label is not the real title.
-- **MongoDB:** the measured publication lives only in an unauthenticated throwaway container.
-  `compose.yaml` now uses `mongo:8.2.12` instead of the 8.0 image that fails on this kernel, but
-  the Compose service has not been started on this host (Docker Compose is not installed,
-  2026-10-26). The pointer's `source` is a
-  machine-local absolute path, so the evidence tab only works on the machine that published.
+- **MongoDB:** the active publication is in the local Compose MongoDB, authenticated as the
+  root user from `.env`. No separate application or read-only user exists. The pointer's `source`
+  is a machine-local absolute path, so the evidence tab only works on the machine that published.
 - **No cluster run:** `configs/full.example.toml` was never used.
 
 ## Delivery checks (2026-10-26)
@@ -1006,7 +1011,8 @@ category metadata (the ETL counts 313,873 interaction items without a title), so
 will show their `parent_asin`. The record is in `<serving>/publications/` and in the `publications` collection, and `source` in the
 pointer is an absolute local path. The publication exists only in the throwaway container, not
 in the Compose MongoDB. If the container is removed, rerun `publish`. (Since then, the second
-publication below replaced it as the active one. Its collections are kept.)
+publication below replaced it as the active one, and its collections were later dropped. The
+active publication is now in the Compose MongoDB.)
 
 Publication with item details, 2026-10-26 (the same materialization, metadata and container,
 `--item-details <run>/item_details`; one run): version `popularity_33f22baa8b00`, collections
@@ -1023,8 +1029,26 @@ Publication with item details, 2026-10-26 (the same materialization, metadata an
 - **Timings:** 271 s of wall time including Spark start: 238 s for the user documents, 2.1 s for
   the items and 27 s for the validation. The user documents took 166 s in the first publication;
   this is one run each, so the difference is not attributed.
-- **Kept:** the collections of `popularity_8918f91d1974` remain, and the record is in
-  `<serving>/publications/popularity_33f22baa8b00-2026-10-26T150852.797774+0000.json`.
+- **Kept:** the collections of `popularity_8918f91d1974` remained at first, and the record is in
+  `<serving>/publications/popularity_33f22baa8b00-2026-10-26T150852.797774+0000.json`. (Since
+  then, at the user's request, the `popularity_8918f91d1974` collections were dropped from the
+  throwaway container. Its row stays in `publications` there.)
+
+Publication into the Compose MongoDB, 2026-10-26 (the same command and inputs as above, but
+`MONGODB_URI` points to the authenticated Compose service on 127.0.0.1:27017; one run):
+- **Version:** the same `popularity_33f22baa8b00`, as designed: the version depends only on the
+  sources.
+- **Contents:** 6,503,429 user documents and 30 item documents, `items_without_details` 0, and
+  29 of 29 untitled items with directors.
+- **Timings:** 291 s of wall time, with 254.5 s for the user documents, 2.2 s for the items and
+  29.2 s for the validation.
+- **Pointer:** published_at 15:29:31 UTC.
+- **Record:** `<serving>/publications/popularity_33f22baa8b00-2026-10-26T152931.113865+0000.json`.
+  It holds no URI or credentials.
+
+This is now the active publication the dashboard reads: a lookup of
+AE223HSYBHVEG3XV2SRRXWFHM5KQ returns 20 rows, all with derived labels. The throwaway
+container's copy is pending removal by the user.
 
 ## Dashboard (P8)
 
@@ -1372,9 +1396,14 @@ These MongoDB limits are initial fixture settings, subject to measurement.
 Since then: `mongo:8.0` refuses to start on Linux kernel 6.19 and newer (SERVER-121912), so every
 measured publication used the throwaway `mongo:8.2.12` container described in the P7 section, with
 the same 1 CPU / 1 GB limits. On 2026-10-26 `compose.yaml` was moved to `mongo:8.2.12`, the
-version that runs on this kernel. The Compose service itself has not been started on this host
-yet, because Docker Compose is not installed here, so its start and authentication are
-unverified.
+version that runs on this kernel. Since then (2026-10-26), with Docker Compose 2.40.3 installed:
+- **Start:** the service was healthy in about 15 s on kernel 7.0, with volume
+  `id2221-recommender_mongodb_data`.
+- **Authentication:** the root user from `.env` authenticates with `authSource=admin`. A client
+  without credentials is refused (13 Unauthorized), and a wrong password is refused (18
+  AuthenticationFailed).
+- **Publication:** the item-details publication was published into it and is the active one
+  (P7 section).
 
 To start MongoDB when ready (this does not start Spark):
 
@@ -1409,9 +1438,9 @@ To start MongoDB when ready (this does not start Spark):
 The publisher and the dashboard read the URI from `MONGODB_URI`.
 Compose reads `.env` automatically; Python does not, so export this variable
 in the shell that runs those applications. Do not put credentials in TOML,
-logs, or Git. The bootstrap administrator is for setup. Separate application users and
-reader permissions were not added (the measured publication used the unauthenticated, localhost-only
-throwaway container); add them before any shared deployment.
+logs, or Git. The bootstrap administrator is for setup. Separate application users and reader
+permissions were not added: the publisher, the dashboard and the tests all use the root user from
+`.env` on the localhost-only Compose service (2026-10-26). Add them before any shared deployment.
 
 MongoDB Atlas is an option if teammates need a shared remote database later.
 Its free tier has roughly 0.5 GB of storage including indexes, so it is not a
