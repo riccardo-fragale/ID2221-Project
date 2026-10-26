@@ -255,6 +255,27 @@ Approved departures, with links to where each was recorded:
 - **Exact full-catalog ranking** instead of the approved approximate shortlist (P0.4, see "ALS
   and bias+ALS"). No recommendation is approximate. This is also what makes ALS top-20 the
   dominant cost.
+- **No `recommendForUserSubset`:** the proposal generates the top-20 lists with MLlib's
+  `recommendForUserSubset`, which no stage calls. Top-k lists come from our own exact ranking
+  instead. The item factors are broadcast, and each partition scores its users against the whole
+  catalog with numpy, in blocks. There are three reasons:
+  - seen items must be masked before the top k is taken, while `recommendForUserSubset` returns
+    the k best including seen items;
+  - for bias+ALS, the item bias must be part of the ranking score, while
+    `recommendForUserSubset` ranks only the latent dot product;
+  - the lists must be exact, with ties broken by item index.
+  Batching by users, the reason the proposal named the method, is kept: materialize processes
+  restartable user batches.
+- **No MLlib evaluators:** the proposal names Spark MLlib for regression and ranking evaluation.
+  The metrics are computed by our own Spark code instead, not by
+  `RegressionEvaluator`/`RankingEvaluator`:
+  - Precision@10 and binary NDCG@10, macro-averaged per user over one fixed eligible cohort that
+    is shared by every system;
+  - short lists counted, with Precision@10 always divided by 10;
+  - user-level bootstrap 95% intervals, the exact random-list reference and the oracle row;
+  - RMSE with clipping and raw diagnostics, and the cohort and missing-prediction counts.
+  The MLlib evaluators do not expose the cohort, the short-list handling, the intervals or the
+  reference rows (P0.3).
 - **Development data portion:** the 20% development sample derives its own cutoffs (P0.2
   allows case-by-case portions).
 - **Serving:** popularity W=180 is served to every user, known ones included, so known users'
@@ -263,8 +284,9 @@ Approved departures, with links to where each was recorded:
 Limitations:
 - **Scalability scope:** this is fixed-resource input scaling in Spark local mode on one host,
   one run per point, warm cache. It is not distributed or worker-count speedup, and run-to-run
-  noise is not measured. MongoDB writes are not part of the benchmark, and publication was
-  timed once (197 s).
+  noise is not measured. MongoDB writes are not part of the benchmark (the user declined a publish
+  benchmark). Each publication was timed once: 197 s without item details, then 271 s and 291 s
+  with them, into the throwaway container and into Compose.
 - **Weak personalized models:** explicit-feedback ALS does not beat recent popularity at top-N
   on this data. The k-core keeps 43% of the refit training rows, and most test rows belong to
   users or items unknown at training time.
@@ -275,27 +297,45 @@ Limitations:
 - **MongoDB:** the active publication is in the local Compose MongoDB, authenticated as the
   root user from `.env`. No separate application or read-only user exists. The pointer's `source`
   is a machine-local absolute path, so the evidence tab only works on the machine that published.
-- **No cluster run:** `configs/full.example.toml` was never used.
+- **No cluster run:** no cluster was available. The "distributed" part of the proposal is
+  therefore exercised only as Spark `local[8]` parallelism inside one JVM on one host. There is no
+  multi-worker run, no network shuffle between machines, and no worker-count speedup
+  measurement. `configs/full.example.toml` is the template for such a run: fill in the cluster
+  master and a shared `storage_root` that every executor can read, size `[spark]` to the
+  cluster, then rerun the full-category part of
+  [Reproducing the experiment tables](#reproducing-the-experiment-tables) and the benchmark with
+  `--config` pointing at it, at a fixed executor count. Its `purpose = "final"` requires all users,
+  so development stays on a local profile. It was never used.
 
 ## Delivery checks (2026-10-26)
 
-**Fresh checkout, simulated.** The P9.2/P9.3 files were not yet committed, so the checkout was
-simulated by copying `git ls-files -co --exclude-standard` (commit d8cdfe6 plus the uncommitted,
-non-ignored files) into an empty directory. Nothing else was copied: no `.venv`, `storage/`,
-`data/` or `.env`. Run there on this host (Java 17.0.20.1, the throwaway MongoDB on port 27117):
+**Fresh checkout, simulated (rerun 2026-10-26 after item details, Compose and the P7 fixes).**
+The checkout was simulated by copying `git ls-files -co --exclude-standard` into an empty
+directory: commit f0cdddd plus the uncommitted, non-ignored changes of this step, which are the
+two P7 fixes and this README. Nothing else was copied: no `.venv`, `storage/`, `data/` or `.env`.
+It ran on this host with Java 17.0.20.1 and the Compose MongoDB (`mongo:8.2.12`, authenticated,
+Docker Compose 2.40.3), with `MONGODB_URI` built as in [Quick start](#quick-start):
 
 | Command | Result |
 | --- | --- |
 | `uv sync --frozen` | new `.venv` from `uv.lock` |
 | `make doctor` | exit 0, `"errors": []` |
-| `make check` | 106 tests OK (45 skipped: Spark/MongoDB gates) |
-| `make check-spark` | 66 tests OK, 178 s |
-| `make check-e2e` | 6 tests OK, 137 s (chain 129 s) |
+| `make check` | 119 tests OK (48 skipped: Spark/MongoDB gates), 7 s |
+| `make check-spark` | 74 tests OK, 192 s |
+| `make check-mongo` | 29 tests OK, 14 s |
+| `make check-e2e` | 6 tests OK, 143 s (chain 135 s) |
+
+Afterwards the Compose server held only `admin`, `amazon_recommender`, `config` and `local`,
+because the tests drop their temporary databases. The active pointer was unchanged
+(`popularity_33f22baa8b00`).
 
 So the fixture workflow needs no untracked file, local data or existing environment. The
-full-data workflow also needs the downloaded files ([Dataset](#dataset)) and the disk measured
-in [Storage requirements](#storage-requirements) (12 GB raw + 5.4 GB run + 1.4 GB MongoDB at the
-end of the runs). It was not rerun from the copy.
+full-data workflow also needs the downloaded files ([Dataset](#dataset)) and the disk measured in
+[Storage requirements](#storage-requirements). It was not rerun from the copy.
+
+An earlier run of the same check, before item details and Compose, used commit d8cdfe6 and the
+throwaway MongoDB on port 27117. It gave 106, 66 and 6 tests OK for check, check-spark and
+check-e2e.
 
 **Repository contents:**
 - `git ls-files` holds no data, storage, model, `.env` or key file, and no tracked file is larger

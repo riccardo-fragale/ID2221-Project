@@ -107,6 +107,19 @@ class PublisherLogicTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "not a completed item-details stage"):
             item_details_stage(path, "r1")
 
+    def test_a_retried_partition_rewrites_the_same_documents_and_counts_nothing(self):
+        from amazon_recommender.publish import _partition_writer
+
+        collection = FakeCollection()
+        client = mock.MagicMock()
+        client.__enter__.return_value = {"db": {"items": collection}}
+        rows = [{"parent_asin": f"i{n}", "title": None} for n in range(3)]
+        write = _partition_writer("mongodb://fake", "db", "items", lambda row: item_document(row, False))
+        with mock.patch("pymongo.MongoClient", return_value=client):
+            results = [write(iter(rows)), write(iter(rows))]  # the second call is a Spark task retry
+        self.assertEqual(results, [None, None])  # nothing to sum, so nothing double-counted
+        self.assertEqual(sorted(collection.documents), ["i0", "i1", "i2"])
+
     def test_missing_uri_fails_before_connecting(self):
         config = load_config(ROOT / "configs/local.toml")
         with mock.patch.dict(os.environ, {}, clear=True), self.assertRaisesRegex(ValueError, "MONGODB_URI"):

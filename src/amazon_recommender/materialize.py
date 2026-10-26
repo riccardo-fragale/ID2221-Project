@@ -52,7 +52,7 @@ def serving_users(raw, known, items, train_cutoff: int, batch_users: int):
     from pyspark.sql import Window, functions as F
 
     pre_cutoff = raw.filter(F.col("timestamp") <= train_cutoff)
-    offset = known.agg(F.max("user_index")).first()[0] + 1
+    offset = known.agg(F.coalesce(F.max("user_index"), F.lit(-1))).first()[0] + 1  # 0 without known users
     others = raw.select("user_id").distinct().join(known.select("user_id"), "user_id", "left_anti")
     # A global row_number moves the other users (about 5.9M on the full category) to one partition; fine
     # at this size and deterministic, unlike indices that depend on partitioning.

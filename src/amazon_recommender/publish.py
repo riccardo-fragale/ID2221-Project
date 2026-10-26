@@ -127,13 +127,17 @@ def write_batches(collection, documents, *, batch_size: int = BATCH_SIZE, retrie
 
 
 def _partition_writer(uri: str, database: str, collection: str, to_document):
-    """Build a mapPartitions function: one client per partition, yields the written count."""
+    """Build a foreachPartition function: one client per partition.
+
+    It returns no count: a retried Spark task would add its partition twice to a summed count,
+    while its upserts by `_id` are idempotent. Counts are taken from the source and MongoDB instead.
+    """
 
     def write(rows):
         from pymongo import MongoClient
 
         with MongoClient(uri) as client:
-            yield write_batches(client[database][collection], (to_document(row) for row in rows))
+            write_batches(client[database][collection], (to_document(row) for row in rows))
 
     return write
 
@@ -207,9 +211,9 @@ def publish(config: ProjectConfig, serving_directory: Path, metadata_directory: 
             recommendations = spark.read.parquet(str(serving_directory / stage["outputs"]["recommendations"]))
             lists = user_lists(users, recommendations)
             with timed(timings, "write_recommendations"):
-                written = lists.rdd.mapPartitions(_partition_writer(
+                lists.foreachPartition(_partition_writer(
                     uri, config.mongo.database, names["recommendations"],
-                    lambda row: user_document(row, version, k))).sum()
+                    lambda row: user_document(row, version, k)))
             items = recommendations.select("parent_asin").distinct().join(
                 spark.read.parquet(str(Path(metadata_directory))).select("parent_asin", "title"), "parent_asin", "left")
             if details:  # left join: an item without details keeps its document, with null fields
@@ -218,14 +222,15 @@ def publish(config: ProjectConfig, serving_directory: Path, metadata_directory: 
                                    "parent_asin", "left")
             with_details = details is not None
             with timed(timings, "write_items"):
-                items_written = items.rdd.mapPartitions(_partition_writer(
+                items.foreachPartition(_partition_writer(
                     uri, config.mongo.database, names["items"],
-                    lambda row: item_document(row, with_details))).sum()
+                    lambda row: item_document(row, with_details)))
             with timed(timings, "validate"):
                 checks = validate(database[names["recommendations"]], lists, users_expected, version, k, config.seed)
+                items_expected = items.count()  # from the source, not from the (retryable) write tasks
                 item_documents = database[names["items"]].count_documents({})
-                if item_documents != items_written:
-                    raise RuntimeError(f"{item_documents} item documents, {items_written} items written")
+                if item_documents != items_expected:
+                    raise RuntimeError(f"{item_documents} item documents, {items_expected} items in the source")
                 item_checks = validate_items(database[names["items"]], items, with_details, config.seed)
             resources = describe_resources(spark, config)
         finally:
@@ -255,8 +260,8 @@ def publish(config: ProjectConfig, serving_directory: Path, metadata_directory: 
         "collections": names,
         "source": str(serving_directory),
         "source_stage_sha256": hashlib.sha256((serving_directory / "stage.json").read_bytes()).hexdigest(),
-        "documents_written": written,
-        "item_documents": items_written,
+        "documents_written": checks["user_documents"],  # counted in MongoDB, equal to the source users
+        "item_documents": item_documents,
         "validation": {**checks, "items": item_checks},
         "resources": resources,
         "timings_seconds": timings,

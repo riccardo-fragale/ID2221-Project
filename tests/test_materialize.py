@@ -14,7 +14,7 @@ from unittest import mock
 
 from amazon_recommender.artifacts import create_run
 from amazon_recommender.config import load_config
-from amazon_recommender.materialize import audit, run_materialize
+from amazon_recommender.materialize import audit, run_materialize, serving_users
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -220,6 +220,14 @@ class AuditTests(unittest.TestCase):
         for check, arguments in cases:
             with self.subTest(check=check), self.assertRaisesRegex(RuntimeError, check):
                 self.check(**arguments)
+
+    def test_users_are_numbered_from_zero_without_known_users(self):
+        raw = self.spark.createDataFrame([("a", "i1", 1), ("b", "i1", 5)], "user_id string, parent_asin string, timestamp long")
+        known = self.spark.createDataFrame([], "user_id string, user_index int")
+        items = self.spark.createDataFrame([("i1", 0)], "parent_asin string, item_index int")
+        users = {row.user_id: row for row in serving_users(raw, known, items, 2, batch_users=10).collect()}
+        self.assertEqual({user: (row.user_index, row.user_type) for user, row in users.items()},
+                         {"a": (0, "removed_by_k_core"), "b": (1, "new")})
 
 
 if __name__ == "__main__":
