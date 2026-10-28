@@ -40,4 +40,8 @@ dist/
 !README.md
 !README.MD
 
+# Keep only the report source and compiled PDF
+/report/*
+!/report/report.pdf
+!/report/report.tex
 
