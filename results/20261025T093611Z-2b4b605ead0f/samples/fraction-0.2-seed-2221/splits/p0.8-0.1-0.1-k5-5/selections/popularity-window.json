@@ -1,0 +1,87 @@
+{
+  "stage": "select-popularity-window",
+  "completed_at": "2026-10-25T16:54:06.592851+00:00",
+  "split": "p0.8-0.1-0.1-k5-5",
+  "sample": "fraction-0.2-seed-2221",
+  "rule": "best = highest mean validation NDCG@10 (ties: longer window); chosen = longest window at least as long as best whose paired user bootstrap 95% CI of NDCG difference vs best contains 0",
+  "rule_written": "after exploratory validation numbers for some windows were seen, before any test result",
+  "bootstrap": {
+    "resamples": 2000,
+    "seed": 2221,
+    "unit": "user"
+  },
+  "users": 6123,
+  "best": 180,
+  "chosen": 180,
+  "mean_ndcg": {
+    "180": 0.007793656449665143,
+    "30": 0.007218576874802674,
+    "365": 0.006145296682491857,
+    "90": 0.007468377171622689,
+    "all": 4.8921908497606986e-05
+  },
+  "difference_vs_best_ci95": {
+    "180": [
+      0.0,
+      0.0
+    ],
+    "30": [
+      -0.0019526687013351673,
+      0.0008708466224610294
+    ],
+    "365": [
+      -0.0026020871277899543,
+      -0.0007741005945443793
+    ],
+    "90": [
+      -0.0012686684432484702,
+      0.000614825550385801
+    ],
+    "all": [
+      -0.009452912888385834,
+      -0.006137592320910464
+    ]
+  },
+  "evaluations": {
+    "180": {
+      "model_label": "popularity-smoothing10-window_days180",
+      "users_with_hit": 125,
+      "ndcg_ci95": [
+        0.006141881971050025,
+        0.009467608128995381
+      ]
+    },
+    "30": {
+      "model_label": "popularity-smoothing10-window_days30",
+      "users_with_hit": 126,
+      "ndcg_ci95": [
+        0.005752719643505388,
+        0.008710556412519894
+      ]
+    },
+    "365": {
+      "model_label": "popularity-smoothing10-window_days365",
+      "users_with_hit": 82,
+      "ndcg_ci95": [
+        0.004639767077998017,
+        0.007818431201243354
+      ]
+    },
+    "90": {
+      "model_label": "popularity-smoothing10-window_days90",
+      "users_with_hit": 117,
+      "ndcg_ci95": [
+        0.005851438539439387,
+        0.009070251257911466
+      ]
+    },
+    "all": {
+      "model_label": "popularity-smoothing10-window_daysall",
+      "users_with_hit": 2,
+      "ndcg_ci95": [
+        0.0,
+        0.00013378890376609102
+      ]
+    }
+  }
+}

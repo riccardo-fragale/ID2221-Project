@@ -1,0 +1,146 @@
+{
+  "stage": "train",
+  "status": "completed",
+  "completed_at": "2026-10-25T17:16:47.841440+00:00",
+  "run_id": "20261025T093611Z-2b4b605ead0f",
+  "sample": "fraction-1-seed-2221",
+  "split": "refit-c0cb58f463fb-k5-5",
+  "split_stage_sha256": "e98c9774375862e216c392fb56e9190c473e52056f05ff179aadaab63a9f24a4",
+  "mappings": {
+    "users": {
+      "count": 598310,
+      "max_index": 598309,
+      "digest": "598310:521138834887927659124"
+    },
+    "items": {
+      "count": 175550,
+      "max_index": 175549,
+      "digest": "175550:-1857318883342974356977"
+    }
+  },
+  "purpose": "exploratory",
+  "model": {
+    "model": "bias-als",
+    "params": {
+      "rank": 50,
+      "regularization": 0.1,
+      "iterations": 10,
+      "seed": 2221,
+      "user_blocks": 10,
+      "item_blocks": 10,
+      "bias_regularization": 10.0,
+      "bias_max_passes": 10,
+      "bias_tolerance": 0.0001
+    },
+    "predicts_ratings": true,
+    "contract": {
+      "fitting_window": "training interactions only",
+      "candidate_universe": "items of the fitted training window",
+      "seen_item_policy": "items in the caller's seen pairs are never recommended",
+      "cold_start": "users or items without factors get no recommendations and no rating prediction (null)",
+      "ranking_score": "global_mean + user_bias + item_bias + dot(factors), unclipped, exact over the whole catalog; ties by ascending item_index",
+      "approximate": false,
+      "rating_prediction": "global_mean + user_bias + item_bias + dot(factors), unclipped"
+    },
+    "fit": {
+      "interactions": 6685212,
+      "global_mean": 4.269735200618919,
+      "users": 598310,
+      "items": 175550,
+      "passes": 10,
+      "max_change_per_pass": [
+        2.9023492230212873,
+        0.7145599733284735,
+        0.12973598735509473,
+        0.04595567436734749,
+        0.018976204985159284,
+        0.007465105214660039,
+        0.0028155794122516342,
+        0.001023821525662827,
+        0.00046785656241343787,
+        0.00022806889223775384
+      ],
+      "converged": false,
+      "residual_mean": -0.006062215379481483,
+      "residual_stddev": 0.9038172224331044,
+      "implicit_prefs": false,
+      "nonnegative": false,
+      "input_partitions": 8,
+      "train_rmse": 0.32924468185744854
+    },
+    "provenance": {
+      "run_id": "20261025T093611Z-2b4b605ead0f",
+      "sample": "fraction-1-seed-2221",
+      "split": "refit-c0cb58f463fb-k5-5",
+      "split_stage_sha256": "e98c9774375862e216c392fb56e9190c473e52056f05ff179aadaab63a9f24a4",
+      "mappings": {
+        "users": {
+          "count": 598310,
+          "max_index": 598309,
+          "digest": "598310:521138834887927659124"
+        },
+        "items": {
+          "count": 175550,
+          "max_index": 175549,
+          "digest": "175550:-1857318883342974356977"
+        }
+      }
+    }
+  },
+  "config": {
+    "profile": "local",
+    "seed": 2221,
+    "storage_root": "storage",
+    "spark": {
+      "master": "local[8]",
+      "driver_memory": "12g",
+      "shuffle_partitions": 64,
+      "event_log_enabled": true
+    },
+    "mongo": {
+      "database": "amazon_recommender",
+      "uri_env": "MONGODB_URI"
+    },
+    "experiment": {
+      "purpose": "exploratory",
+      "user_fraction": 0.2,
+      "split": [
+        0.8,
+        0.1,
+        0.1
+      ],
+      "user_min_reviews": 5,
+      "item_min_reviews": 5,
+      "relevant_rating": 4.0
+    },
+    "model": {
+      "rank": 50,
+      "regularization": 0.1,
+      "iterations": 10,
+      "bias_regularization": 10.0,
+      "bias_max_passes": 10,
+      "bias_tolerance": 0.0001,
+      "popularity_smoothing": 10.0,
+      "popularity_window_days": "all",
+      "recommendation_count": 20,
+      "num_user_blocks": 10,
+      "num_item_blocks": 10
+    }
+  },
+  "config_digest": "5bb22c144b92db6fb15472385fbccb91a81111c57d672989652938d511daacc1",
+  "resources": {
+    "master": "local[8]",
+    "driver_memory": "12g",
+    "shuffle_partitions": 64,
+    "spark_version": "3.5.6",
+    "java_version": "17.0.20.1"
+  },
+  "timings_seconds": {
+    "fit": 85.943,
+    "save": 1.278,
+    "total": 90.024
+  },
+  "outputs": {
+    "model": "model"
+  }
+}

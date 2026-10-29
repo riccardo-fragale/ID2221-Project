@@ -1,0 +1,144 @@
+{
+  "stage": "evaluate",
+  "status": "completed",
+  "completed_at": "2026-10-25T17:20:44.506274+00:00",
+  "run_id": "20261025T093611Z-2b4b605ead0f",
+  "sample": "fraction-1-seed-2221",
+  "split": "refit-c0cb58f463fb-k5-5",
+  "window": "test",
+  "view": {
+    "name": "test-h180d",
+    "horizon_days": 180,
+    "coverage": false,
+    "label": null
+  },
+  "purpose": "exploratory",
+  "model_label": "popularity-smoothing10-window_daysall",
+  "model": "popularity",
+  "reference_only": false,
+  "params": {
+    "smoothing": 10.0,
+    "window_days": "all"
+  },
+  "model_stage_sha256": "bd1f29ee0809cf59f142abbaa3438e81428bfb854656d21d2363262460fa0640",
+  "approximate": false,
+  "metrics": {
+    "k": 10,
+    "relevant_rating": 4.0,
+    "catalog_items": 175550,
+    "cohort": {
+      "held_out_rows": 59553,
+      "held_out_users": 26811,
+      "eligible_users": 21613,
+      "users_without_relevant": 5198,
+      "relevant_pairs": 45045
+    },
+    "ranking": {
+      "precision_at_k": 1.3880534863276734e-05,
+      "ndcg_at_k": 2.6365961204428957e-05,
+      "recall_at_50": 0.0008042540847480369,
+      "recall_at_100": 0.0013550689602748914,
+      "hit_rate": 0.0001388053486327673,
+      "users_with_hit": 3,
+      "hits": 3,
+      "short_lists": 0,
+      "short_lists_at_100": 0,
+      "precision_ci95": [
+        0.0,
+        3.2387914680979037e-05
+      ],
+      "ndcg_ci95": [
+        0.0,
+        7.064570203960692e-05
+      ],
+      "bootstrap": {
+        "resamples": 2000,
+        "seed": 2221,
+        "unit": "user"
+      }
+    },
+    "random_reference": {
+      "note": "exact expectation of a uniformly random top-k over each user's unseen catalog; not a system",
+      "precision_at_k": 1.1875326186789092e-05,
+      "ndcg_at_k": 3.103648573133903e-05,
+      "recall_at_50": 0.0002848544264907964,
+      "recall_at_100": 0.0005697088529815928,
+      "expected_users_with_hit": 2.5660752845021984
+    },
+    "signal_vs_random": {
+      "observed_users_with_hit": 3,
+      "expected_users_with_hit": 2.5660752845021984,
+      "ratio": 1.1691005396912897,
+      "p_value_one_sided": 0.473020869025424,
+      "log10_p_value_one_sided": -0.325119698368634,
+      "test": "users with a hit vs the random null, Poisson approximation of the Poisson-binomial (conservative for the upper tail: its variance sum p exceeds sum p(1-p))"
+    },
+    "segments": {
+      "<5": {
+        "users": 0
+      },
+      "5-9": {
+        "users": 9610,
+        "precision_at_k": 1.040582726326743e-05,
+        "ndcg_at_k": 4.025523488392733e-05,
+        "recall_at_50": 0.0006905771994221526,
+        "recall_at_100": 0.001287673478100117,
+        "hit_rate": 0.0001040582726326743,
+        "users_with_hit": 1,
+        "expected_users_with_hit_if_random": 0.8918406565830275,
+        "short_lists": 0,
+        "short_lists_at_100": 0,
+        "ratio_to_random": 1.1212765336706796
+      },
+      "10-49": {
+        "users": 10209,
+        "precision_at_k": 9.795278675678323e-06,
+        "ndcg_at_k": 8.340005646157409e-06,
+        "recall_at_50": 0.0008678077931987021,
+        "recall_at_100": 0.0013494089947528863,
+        "hit_rate": 9.795278675678323e-05,
+        "users_with_hit": 1,
+        "expected_users_with_hit_if_random": 1.200996350720413,
+        "short_lists": 0,
+        "short_lists_at_100": 0,
+        "ratio_to_random": 0.8326419971219344
+      },
+      "50+": {
+        "users": 1794,
+        "precision_at_k": 5.574136008918618e-05,
+        "ndcg_at_k": 5.4543809718595555e-05,
+        "recall_at_50": 0.0010515311518655998,
+        "recall_at_100": 0.0017482981529804275,
+        "hit_rate": 0.0005574136008918618,
+        "users_with_hit": 1,
+        "expected_users_with_hit_if_random": 0.4732382771986813,
+        "short_lists": 0,
+        "short_lists_at_100": 0,
+        "ratio_to_random": 2.1131004151216755
+      }
+    },
+    "rating": {
+      "rows": 59553,
+      "predicted": 59553,
+      "missing_or_nonfinite": 0,
+      "clipped_rows": 0,
+      "rmse": 1.2746238350651344,
+      "rmse_raw": 1.2746238350651344
+    }
+  },
+  "resources": {
+    "master": "local[8]",
+    "driver_memory": "12g",
+    "shuffle_partitions": 64,
+    "spark_version": "3.5.6",
+    "java_version": "17.0.20.1"
+  },
+  "timings_seconds": {
+    "evaluate": 9.471,
+    "per_user_write": 0.813,
+    "total": 13.294
+  },
+  "outputs": {
+    "per_user": "per_user"
+  }
+}

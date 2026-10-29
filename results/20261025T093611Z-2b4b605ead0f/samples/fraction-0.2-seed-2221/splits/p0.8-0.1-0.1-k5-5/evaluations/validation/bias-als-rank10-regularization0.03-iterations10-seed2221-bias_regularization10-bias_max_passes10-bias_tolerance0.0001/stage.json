@@ -1,0 +1,149 @@
+{
+  "stage": "evaluate",
+  "status": "completed",
+  "completed_at": "2026-10-25T17:00:35.686380+00:00",
+  "run_id": "20261025T093611Z-2b4b605ead0f",
+  "sample": "fraction-0.2-seed-2221",
+  "split": "p0.8-0.1-0.1-k5-5",
+  "window": "validation",
+  "view": {
+    "name": "validation",
+    "horizon_days": null,
+    "coverage": false,
+    "label": null
+  },
+  "purpose": "exploratory",
+  "model_label": "bias-als-rank10-regularization0.03-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001",
+  "model": "bias-als",
+  "reference_only": false,
+  "params": {
+    "rank": 10,
+    "regularization": 0.03,
+    "iterations": 10,
+    "seed": 2221,
+    "bias_regularization": 10.0,
+    "bias_max_passes": 10,
+    "bias_tolerance": 0.0001
+  },
+  "model_stage_sha256": "351ef437a8949f373c2af17e0a84785107e1957b6a238c1f4ae360269446c1fd",
+  "approximate": false,
+  "metrics": {
+    "k": 10,
+    "relevant_rating": 4.0,
+    "catalog_items": 47491,
+    "cohort": {
+      "held_out_rows": 18524,
+      "held_out_users": 7239,
+      "eligible_users": 6123,
+      "users_without_relevant": 1116,
+      "relevant_pairs": 15216
+    },
+    "ranking": {
+      "precision_at_k": 8.165931732810714e-05,
+      "ndcg_at_k": 9.34996160191604e-05,
+      "recall_at_50": 0.0008332484694261258,
+      "recall_at_100": 0.002535901274918294,
+      "hit_rate": 0.0008165931732810714,
+      "users_with_hit": 5,
+      "hits": 5,
+      "short_lists": 0,
+      "short_lists_at_100": 0,
+      "precision_ci95": [
+        1.633186346562143e-05,
+        0.00016331863465621427
+      ],
+      "ndcg_ci95": [
+        1.4877086922008501e-05,
+        0.00019671892425391754
+      ],
+      "bootstrap": {
+        "resamples": 2000,
+        "seed": 2221,
+        "unit": "user"
+      }
+    },
+    "random_reference": {
+      "note": "exact expectation of a uniformly random top-k over each user's unseen catalog; not a system",
+      "precision_at_k": 5.2354353150158775e-05,
+      "ndcg_at_k": 0.00012138996313277033,
+      "recall_at_50": 0.0010532018529611057,
+      "recall_at_100": 0.0021064037059222115,
+      "expected_users_with_hit": 3.203206424413063
+    },
+    "signal_vs_random": {
+      "observed_users_with_hit": 5,
+      "expected_users_with_hit": 3.203206424413063,
+      "ratio": 1.5609359302893415,
+      "p_value_one_sided": 0.219958758545543,
+      "log10_p_value_one_sided": -0.65765874015556,
+      "test": "users with a hit vs the random null, Poisson approximation of the Poisson-binomial (conservative for the upper tail: its variance sum p exceeds sum p(1-p))"
+    },
+    "segments": {
+      "<5": {
+        "users": 0
+      },
+      "5-9": {
+        "users": 3077,
+        "precision_at_k": 6.4998375040624e-05,
+        "ndcg_at_k": 5.216887395522759e-05,
+        "recall_at_50": 0.0005791521878619701,
+        "recall_at_100": 0.0023818253750005455,
+        "hit_rate": 0.0006499837504062399,
+        "users_with_hit": 2,
+        "expected_users_with_hit_if_random": 1.3015965888280332,
+        "short_lists": 0,
+        "short_lists_at_100": 0,
+        "ratio_to_random": 1.536574401904982
+      },
+      "10-49": {
+        "users": 2737,
+        "precision_at_k": 7.30727073438071e-05,
+        "ndcg_at_k": 7.233769053363399e-05,
+        "recall_at_50": 0.0006983790602043395,
+        "recall_at_100": 0.0024593903700991415,
+        "hit_rate": 0.0007307270734380709,
+        "users_with_hit": 2,
+        "expected_users_with_hit_if_random": 1.563962136767278,
+        "short_lists": 0,
+        "short_lists_at_100": 0,
+        "ratio_to_random": 1.2788033373582917
+      },
+      "50+": {
+        "users": 309,
+        "precision_at_k": 0.00032362459546925567,
+        "ndcg_at_k": 0.0006925121836068853,
+        "recall_at_50": 0.004558141127720416,
+        "recall_at_100": 0.0047478815031931675,
+        "hit_rate": 0.003236245954692557,
+        "users_with_hit": 1,
+        "expected_users_with_hit_if_random": 0.33764769881774526,
+        "short_lists": 0,
+        "short_lists_at_100": 0,
+        "ratio_to_random": 2.961666860166513
+      }
+    },
+    "rating": {
+      "rows": 18524,
+      "predicted": 18524,
+      "missing_or_nonfinite": 0,
+      "clipped_rows": 2735,
+      "rmse": 1.2189990662066446,
+      "rmse_raw": 1.2578032320012058
+    }
+  },
+  "resources": {
+    "master": "local[8]",
+    "driver_memory": "12g",
+    "shuffle_partitions": 64,
+    "spark_version": "3.5.6",
+    "java_version": "17.0.20.1"
+  },
+  "timings_seconds": {
+    "evaluate": 8.43,
+    "per_user_write": 0.794,
+    "total": 12.296
+  },
+  "outputs": {
+    "per_user": "per_user"
+  }
+}

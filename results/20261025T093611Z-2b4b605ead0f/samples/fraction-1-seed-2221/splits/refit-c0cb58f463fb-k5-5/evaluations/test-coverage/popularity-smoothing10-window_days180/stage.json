@@ -1,0 +1,211 @@
+{
+  "stage": "evaluate",
+  "status": "completed",
+  "completed_at": "2026-10-25T17:22:15.423683+00:00",
+  "run_id": "20261025T093611Z-2b4b605ead0f",
+  "sample": "fraction-1-seed-2221",
+  "split": "refit-c0cb58f463fb-k5-5",
+  "window": "test",
+  "view": {
+    "name": "test-coverage",
+    "horizon_days": null,
+    "coverage": true,
+    "label": "serving coverage view, not a model comparison"
+  },
+  "purpose": "exploratory",
+  "model_label": "popularity-smoothing10-window_days180",
+  "model": "popularity",
+  "reference_only": false,
+  "params": {
+    "smoothing": 10.0,
+    "window_days": 180
+  },
+  "model_stage_sha256": "3771b81190db0102d1dc42e7d9cbc04a29c8a21b0d94f1e51dd295a98c144e7d",
+  "approximate": false,
+  "metrics": {
+    "k": 10,
+    "relevant_rating": 4.0,
+    "catalog_items": 175550,
+    "cohort": {
+      "held_out_rows": 750953,
+      "held_out_users": 458271,
+      "eligible_users": 359147,
+      "users_without_relevant": 99124,
+      "relevant_pairs": 586417
+    },
+    "ranking": {
+      "precision_at_k": 0.0016809273083168413,
+      "ndcg_at_k": 0.007322194339901902,
+      "recall_at_50": 0.0313228555888369,
+      "recall_at_100": 0.042035296740119646,
+      "hit_rate": 0.01679256683196574,
+      "users_with_hit": 6031,
+      "hits": 6037,
+      "short_lists": 0,
+      "short_lists_at_100": 0,
+      "precision_ci95": [
+        0.0016374910551946696,
+        0.0017229713738385677
+      ],
+      "ndcg_ci95": [
+        0.007111477183795142,
+        0.007528495087202785
+      ],
+      "bootstrap": {
+        "resamples": 2000,
+        "seed": 2221,
+        "unit": "user"
+      }
+    },
+    "random_reference": {
+      "note": "exact expectation of a uniformly random top-k over each user's unseen catalog; not a system",
+      "precision_at_k": 9.301652321986452e-06,
+      "ndcg_at_k": 2.8939534696339073e-05,
+      "recall_at_50": 0.0002848236307295466,
+      "recall_at_100": 0.0005696472614590931,
+      "expected_users_with_hit": 33.40127802573299
+    },
+    "signal_vs_random": {
+      "observed_users_with_hit": 6031,
+      "expected_users_with_hit": 33.40127802573299,
+      "ratio": 180.56195320890419,
+      "p_value_one_sided": 0.0,
+      "log10_p_value_one_sided": -11007.275727185792,
+      "test": "users with a hit vs the random null, Poisson approximation of the Poisson-binomial (conservative for the upper tail: its variance sum p exceeds sum p(1-p))"
+    },
+    "segments": {
+      "<5": {
+        "users": 314535,
+        "precision_at_k": 0.0017870825186388133,
+        "ndcg_at_k": 0.007878344264886681,
+        "recall_at_50": 0.03311035739204512,
+        "recall_at_100": 0.0440420477356628,
+        "hit_rate": 0.017854928704277743,
+        "users_with_hit": 5616,
+        "expected_users_with_hit_if_random": 26.306287309966397,
+        "short_lists": 0,
+        "short_lists_at_100": 0,
+        "ratio_to_random": 213.48508566894284
+      },
+      "5-9": {
+        "users": 21147,
+        "precision_at_k": 0.0009646758405447589,
+        "ndcg_at_k": 0.003861675282738,
+        "recall_at_50": 0.021956193169224092,
+        "recall_at_100": 0.03150517413147334,
+        "hit_rate": 0.009599470374048328,
+        "users_with_hit": 203,
+        "expected_users_with_hit_if_random": 2.430142991776977,
+        "short_lists": 0,
+        "short_lists_at_100": 0,
+        "ratio_to_random": 83.53417913550909
+      },
+      "10-49": {
+        "users": 20621,
+        "precision_at_k": 0.0008680471364143342,
+        "ndcg_at_k": 0.0029465661993828066,
+        "recall_at_50": 0.01617144403233927,
+        "recall_at_100": 0.025307585429194524,
+        "hit_rate": 0.00868047136414335,
+        "users_with_hit": 179,
+        "expected_users_with_hit_if_random": 3.376384706874777,
+        "short_lists": 0,
+        "short_lists_at_100": 0,
+        "ratio_to_random": 53.01528573907225
+      },
+      "50+": {
+        "users": 2844,
+        "precision_at_k": 0.0011603375527426167,
+        "ndcg_at_k": 0.0032718454413236606,
+        "recall_at_50": 0.013137970997403312,
+        "recall_at_100": 0.01968269947019718,
+        "hit_rate": 0.011603375527426161,
+        "users_with_hit": 33,
+        "expected_users_with_hit_if_random": 1.2884630170880418,
+        "short_lists": 0,
+        "short_lists_at_100": 0,
+        "ratio_to_random": 25.61191090651621
+      }
+    },
+    "rating": {
+      "rows": 750953,
+      "predicted": 750953,
+      "missing_or_nonfinite": 0,
+      "clipped_rows": 0,
+      "rmse": 1.3454855369076177,
+      "rmse_raw": 1.3454855369076177
+    },
+    "user_types": {
+      "known": {
+        "users": 44612,
+        "precision_at_k": 0.0009324845333094307,
+        "ndcg_at_k": 0.0034010830547085524,
+        "recall_at_50": 0.01872015049442003,
+        "recall_at_100": 0.0278867845823305,
+        "hit_rate": 0.009302429839505065,
+        "users_with_hit": 415,
+        "expected_users_with_hit_if_random": 7.094990715739872,
+        "short_lists": 0,
+        "short_lists_at_100": 0,
+        "ratio_to_random": 58.49197224167522,
+        "ndcg_ci95": [
+          0.003028380698015393,
+          0.003786904840417447
+        ]
+      },
+      "removed_by_k_core": {
+        "users": 87178,
+        "precision_at_k": 0.0014900548303470702,
+        "ndcg_at_k": 0.006331819758344478,
+        "recall_at_50": 0.030361722921929804,
+        "recall_at_100": 0.04135929351625993,
+        "hit_rate": 0.014889077519557687,
+        "users_with_hit": 1298,
+        "expected_users_with_hit_if_random": 7.867268913278108,
+        "short_lists": 0,
+        "short_lists_at_100": 0,
+        "ratio_to_random": 164.98736909949523,
+        "ndcg_ci95": [
+          0.005956469948321324,
+          0.006732336639584785
+        ]
+      },
+      "new": {
+        "users": 227357,
+        "precision_at_k": 0.001900975118426218,
+        "ndcg_at_k": 0.008471345199238643,
+        "recall_at_50": 0.034164296597064825,
+        "recall_at_100": 0.04507072575014669,
+        "hit_rate": 0.018992157707921904,
+        "users_with_hit": 4318,
+        "expected_users_with_hit_if_random": 18.439018396649534,
+        "short_lists": 0,
+        "short_lists_at_100": 0,
+        "ratio_to_random": 234.17732479645463,
+        "ndcg_ci95": [
+          0.008190192579921556,
+          0.008743421456850194
+        ]
+      }
+    },
+    "coverage": {
+      "window_rows": 1715851,
+      "rows_on_catalog_items": 750953
+    }
+  },
+  "resources": {
+    "master": "local[8]",
+    "driver_memory": "12g",
+    "shuffle_partitions": 64,
+    "spark_version": "3.5.6",
+    "java_version": "17.0.20.1"
+  },
+  "timings_seconds": {
+    "evaluate": 52.66,
+    "per_user_write": 1.202,
+    "total": 61.183
+  },
+  "outputs": {
+    "per_user": "per_user"
+  }
+}

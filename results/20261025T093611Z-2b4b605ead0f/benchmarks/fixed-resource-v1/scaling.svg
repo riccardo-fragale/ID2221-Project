@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="640" font-family="sans-serif" font-size="12">
+<rect width="100%" height="100%" fill="white"/>
+<line x1="56.0" y1="384.0" x2="584.0" y2="384.0" stroke="black"/>
+<line x1="56.0" y1="384.0" x2="56.0" y2="56.0" stroke="black"/>
+<line x1="56.0" y1="384.0" x2="584.0" y2="56.0" stroke="#9ca3af" stroke-dasharray="4 4"/>
+<text x="320.0" y="424" text-anchor="middle">input rows / input rows at the smallest fraction</text>
+<text x="16" y="220.0" transform="rotate(-90 16 220.0)" text-anchor="middle">stage time / time at the smallest fraction</text>
+<text x="56.0" y="400.0" text-anchor="middle">0</text>
+<text x="48.0" y="388.0" text-anchor="end">0</text>
+<text x="97.35540687182521" y="400.0" text-anchor="middle">1</text>
+<text x="48.0" y="362.3095199735631" text-anchor="end">1</text>
+<text x="138.71081374365042" y="400.0" text-anchor="middle">2</text>
+<text x="48.0" y="336.6190399471262" text-anchor="end">2</text>
+<text x="180.06622061547563" y="400.0" text-anchor="middle">3</text>
+<text x="48.0" y="310.9285599206894" text-anchor="end">3</text>
+<text x="221.42162748730084" y="400.0" text-anchor="middle">4</text>
+<text x="48.0" y="285.2380798942525" text-anchor="end">4</text>
+<text x="262.7770343591261" y="400.0" text-anchor="middle">5</text>
+<text x="48.0" y="259.5475998678156" text-anchor="end">5</text>
+<text x="304.13244123095126" y="400.0" text-anchor="middle">6</text>
+<text x="48.0" y="233.85711984137876" text-anchor="end">6</text>
+<text x="345.48784810277647" y="400.0" text-anchor="middle">7</text>
+<text x="48.0" y="208.16663981494187" text-anchor="end">7</text>
+<text x="386.8432549746017" y="400.0" text-anchor="middle">8</text>
+<text x="48.0" y="182.47615978850502" text-anchor="end">8</text>
+<text x="428.19866184642694" y="400.0" text-anchor="middle">9</text>
+<text x="48.0" y="156.78567976206813" text-anchor="end">9</text>
+<text x="469.55406871825215" y="400.0" text-anchor="middle">10</text>
+<text x="48.0" y="131.09519973563124" text-anchor="end">10</text>
+<text x="510.90947559007736" y="400.0" text-anchor="middle">11</text>
+<text x="48.0" y="105.40471970919435" text-anchor="end">11</text>
+<text x="552.2648824619025" y="400.0" text-anchor="middle">12</text>
+<text x="48.0" y="79.71423968275752" text-anchor="end">12</text>
+<polyline points="97.4,358.3 97.4,351.1" fill="none" stroke="#2563eb" stroke-width="2"/>
+<circle cx="97.4" cy="358.3" r="3" fill="#2563eb"/>
+<circle cx="97.4" cy="351.1" r="3" fill="#2563eb"/>
+<text x="56" y="444" fill="#2563eb">sample</text>
+<polyline points="97.4,358.3 138.7,342.1 221.5,293.8" fill="none" stroke="#dc2626" stroke-width="2"/>
+<circle cx="97.4" cy="358.3" r="3" fill="#dc2626"/>
+<circle cx="138.7" cy="342.1" r="3" fill="#dc2626"/>
+<circle cx="221.5" cy="293.8" r="3" fill="#dc2626"/>
+<text x="56" y="464" fill="#dc2626">split</text>
+<polyline points="97.4,358.3 149.4,354.0 258.5,348.7" fill="none" stroke="#16a34a" stroke-width="2"/>
+<circle cx="97.4" cy="358.3" r="3" fill="#16a34a"/>
+<circle cx="149.4" cy="354.0" r="3" fill="#16a34a"/>
+<circle cx="258.5" cy="348.7" r="3" fill="#16a34a"/>
+<text x="56" y="484" fill="#16a34a">train:popularity</text>
+<polyline points="97.4,358.3 149.4,336.8 258.5,321.1" fill="none" stroke="#9333ea" stroke-width="2"/>
+<circle cx="97.4" cy="358.3" r="3" fill="#9333ea"/>
+<circle cx="149.4" cy="336.8" r="3" fill="#9333ea"/>
+<circle cx="258.5" cy="321.1" r="3" fill="#9333ea"/>
+<text x="56" y="504" fill="#9333ea">recommend:popularity</text>
+<polyline points="97.4,358.3 149.4,348.9 258.5,329.6" fill="none" stroke="#ea580c" stroke-width="2"/>
+<circle cx="97.4" cy="358.3" r="3" fill="#ea580c"/>
+<circle cx="149.4" cy="348.9" r="3" fill="#ea580c"/>
+<circle cx="258.5" cy="329.6" r="3" fill="#ea580c"/>
+<text x="56" y="524" fill="#ea580c">train:bias</text>
+<polyline points="97.4,358.3 149.4,340.0 258.5,323.7" fill="none" stroke="#0891b2" stroke-width="2"/>
+<circle cx="97.4" cy="358.3" r="3" fill="#0891b2"/>
+<circle cx="149.4" cy="340.0" r="3" fill="#0891b2"/>
+<circle cx="258.5" cy="323.7" r="3" fill="#0891b2"/>
+<text x="56" y="544" fill="#0891b2">recommend:bias</text>
+<polyline points="97.4,358.3 149.4,340.0 258.5,301.8" fill="none" stroke="#4b5563" stroke-width="2"/>
+<circle cx="97.4" cy="358.3" r="3" fill="#4b5563"/>
+<circle cx="149.4" cy="340.0" r="3" fill="#4b5563"/>
+<circle cx="258.5" cy="301.8" r="3" fill="#4b5563"/>
+<text x="56" y="564" fill="#4b5563">train:als</text>
+<polyline points="97.4,358.3 149.4,318.6 258.5,127.3" fill="none" stroke="#ca8a04" stroke-width="2"/>
+<circle cx="97.4" cy="358.3" r="3" fill="#ca8a04"/>
+<circle cx="149.4" cy="318.6" r="3" fill="#ca8a04"/>
+<circle cx="258.5" cy="127.3" r="3" fill="#ca8a04"/>
+<text x="56" y="584" fill="#ca8a04">recommend:als</text>
+<polyline points="97.4,358.3 149.4,343.8 258.5,310.5" fill="none" stroke="#db2777" stroke-width="2"/>
+<circle cx="97.4" cy="358.3" r="3" fill="#db2777"/>
+<circle cx="149.4" cy="343.8" r="3" fill="#db2777"/>
+<circle cx="258.5" cy="310.5" r="3" fill="#db2777"/>
+<text x="56" y="604" fill="#db2777">train:bias-als</text>
+<polyline points="97.4,358.3 149.4,314.5 258.5,71.6" fill="none" stroke="#65a30d" stroke-width="2"/>
+<circle cx="97.4" cy="358.3" r="3" fill="#65a30d"/>
+<circle cx="149.4" cy="314.5" r="3" fill="#65a30d"/>
+<circle cx="258.5" cy="71.6" r="3" fill="#65a30d"/>
+<text x="56" y="624" fill="#65a30d">recommend:bias-als</text>
+</svg>

@@ -1,0 +1,217 @@
+{
+  "stage": "select-grid",
+  "completed_at": "2026-10-25T17:06:06.622961+00:00",
+  "split": "p0.8-0.1-0.1-k5-5",
+  "sample": "fraction-0.2-seed-2221",
+  "model": "bias-als",
+  "rule": "highest mean validation NDCG@10; ties: smaller rank, larger regularization, fewer iterations",
+  "rule_written": "before any ALS result was seen",
+  "users": 6123,
+  "chosen": "bias-als-rank50-regularization0.1-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001",
+  "mean_ndcg": {
+    "bias-als-rank10-regularization0.03-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001": 9.34996160191604e-05,
+    "bias-als-rank10-regularization0.1-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001": 0.00013609886221351187,
+    "bias-als-rank10-regularization0.3-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001": 4.633554703528203e-05,
+    "bias-als-rank25-regularization0.03-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001": 0.00017511364897703155,
+    "bias-als-rank25-regularization0.1-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001": 0.00028921664094676833,
+    "bias-als-rank25-regularization0.3-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001": 0.0002252008542939634,
+    "bias-als-rank50-regularization0.03-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001": 0.00011686447944420154,
+    "bias-als-rank50-regularization0.1-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001": 0.0003534952350791187,
+    "bias-als-rank50-regularization0.3-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001": 0.000173786067943588
+  },
+  "difference_vs_chosen_ci95": {
+    "bias-als-rank10-regularization0.03-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001": [
+      -0.0005889617711375642,
+      1.1782087981167328e-05
+    ],
+    "bias-als-rank10-regularization0.1-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001": [
+      -0.0005746674528475022,
+      0.00012847726960825886
+    ],
+    "bias-als-rank10-regularization0.3-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001": [
+      -0.0006246140964075449,
+      -4.397815414427812e-05
+    ],
+    "bias-als-rank25-regularization0.03-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001": [
+      -0.0005249953864728167,
+      0.00014537350750215333
+    ],
+    "bias-als-rank25-regularization0.1-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001": [
+      -0.0004454848096070865,
+      0.00028221449902614623
+    ],
+    "bias-als-rank25-regularization0.3-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001": [
+      -0.0003885297368318783,
+      0.00013456315655858788
+    ],
+    "bias-als-rank50-regularization0.03-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001": [
+      -0.0004842621535064197,
+      -1.9063798767594203e-05
+    ],
+    "bias-als-rank50-regularization0.1-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001": [
+      0.0,
+      0.0
+    ],
+    "bias-als-rank50-regularization0.3-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001": [
+      -0.0004539804240073185,
+      0.00011424998073394373
+    ]
+  },
+  "params": {
+    "bias-als-rank10-regularization0.03-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001": {
+      "rank": 10,
+      "regularization": 0.03,
+      "iterations": 10,
+      "seed": 2221,
+      "bias_regularization": 10.0,
+      "bias_max_passes": 10,
+      "bias_tolerance": 0.0001
+    },
+    "bias-als-rank10-regularization0.1-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001": {
+      "rank": 10,
+      "regularization": 0.1,
+      "iterations": 10,
+      "seed": 2221,
+      "bias_regularization": 10.0,
+      "bias_max_passes": 10,
+      "bias_tolerance": 0.0001
+    },
+    "bias-als-rank10-regularization0.3-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001": {
+      "rank": 10,
+      "regularization": 0.3,
+      "iterations": 10,
+      "seed": 2221,
+      "bias_regularization": 10.0,
+      "bias_max_passes": 10,
+      "bias_tolerance": 0.0001
+    },
+    "bias-als-rank25-regularization0.03-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001": {
+      "rank": 25,
+      "regularization": 0.03,
+      "iterations": 10,
+      "seed": 2221,
+      "bias_regularization": 10.0,
+      "bias_max_passes": 10,
+      "bias_tolerance": 0.0001
+    },
+    "bias-als-rank25-regularization0.1-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001": {
+      "rank": 25,
+      "regularization": 0.1,
+      "iterations": 10,
+      "seed": 2221,
+      "bias_regularization": 10.0,
+      "bias_max_passes": 10,
+      "bias_tolerance": 0.0001
+    },
+    "bias-als-rank25-regularization0.3-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001": {
+      "rank": 25,
+      "regularization": 0.3,
+      "iterations": 10,
+      "seed": 2221,
+      "bias_regularization": 10.0,
+      "bias_max_passes": 10,
+      "bias_tolerance": 0.0001
+    },
+    "bias-als-rank50-regularization0.03-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001": {
+      "rank": 50,
+      "regularization": 0.03,
+      "iterations": 10,
+      "seed": 2221,
+      "bias_regularization": 10.0,
+      "bias_max_passes": 10,
+      "bias_tolerance": 0.0001
+    },
+    "bias-als-rank50-regularization0.1-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001": {
+      "rank": 50,
+      "regularization": 0.1,
+      "iterations": 10,
+      "seed": 2221,
+      "bias_regularization": 10.0,
+      "bias_max_passes": 10,
+      "bias_tolerance": 0.0001
+    },
+    "bias-als-rank50-regularization0.3-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001": {
+      "rank": 50,
+      "regularization": 0.3,
+      "iterations": 10,
+      "seed": 2221,
+      "bias_regularization": 10.0,
+      "bias_max_passes": 10,
+      "bias_tolerance": 0.0001
+    }
+  },
+  "evaluations": {
+    "bias-als-rank10-regularization0.03-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001": {
+      "users_with_hit": 5,
+      "ndcg_ci95": [
+        1.4877086922008501e-05,
+        0.00019671892425391754
+      ],
+      "rmse": 1.2189990662066446
+    },
+    "bias-als-rank10-regularization0.1-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001": {
+      "users_with_hit": 2,
+      "ndcg_ci95": [
+        0.0,
+        0.0003538570417551309
+      ],
+      "rmse": 1.146482704767449
+    },
+    "bias-als-rank10-regularization0.3-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001": {
+      "users_with_hit": 2,
+      "ndcg_ci95": [
+        0.0,
+        0.00013900664110584607
+      ],
+      "rmse": 1.0818132484513565
+    },
+    "bias-als-rank25-regularization0.03-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001": {
+      "users_with_hit": 5,
+      "ndcg_ci95": [
+        2.2678824738454114e-05,
+        0.0004092162613729556
+      ],
+      "rmse": 1.12997824280374
+    },
+    "bias-als-rank25-regularization0.1-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001": {
+      "users_with_hit": 7,
+      "ndcg_ci95": [
+        8.288557796136355e-05,
+        0.000533481187309469
+      ],
+      "rmse": 1.1017595910610534
+    },
+    "bias-als-rank25-regularization0.3-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001": {
+      "users_with_hit": 6,
+      "ndcg_ci95": [
+        2.746240184042313e-05,
+        0.0005089168301706745
+      ],
+      "rmse": 1.0772237647299214
+    },
+    "bias-als-rank50-regularization0.03-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001": {
+      "users_with_hit": 4,
+      "ndcg_ci95": [
+        1.039046026440498e-05,
+        0.00025821815815738026
+      ],
+      "rmse": 1.0968147533061832
+    },
+    "bias-als-rank50-regularization0.1-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001": {
+      "users_with_hit": 7,
+      "ndcg_ci95": [
+        0.00010606484794887075,
+        0.0006644267542301449
+      ],
+      "rmse": 1.085759562622887
+    },
+    "bias-als-rank50-regularization0.3-iterations10-seed2221-bias_regularization10-bias_max_passes10-bias_tolerance0.0001": {
+      "users_with_hit": 3,
+      "ndcg_ci95": [
+        0.0,
+        0.0004108205155803901
+      ],
+      "rmse": 1.072772895092868
+    }
+  }
+}

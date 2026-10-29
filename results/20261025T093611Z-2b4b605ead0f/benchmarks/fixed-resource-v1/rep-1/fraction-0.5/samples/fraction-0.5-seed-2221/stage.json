@@ -1,0 +1,92 @@
+{
+  "stage": "sample",
+  "status": "completed",
+  "completed_at": "2026-10-25T18:23:53.253409+00:00",
+  "run_id": "20261025T093611Z-2b4b605ead0f",
+  "config_digest": "abae6b90c884769968ac405a99f14d35d1dd363f9585d7a317ab98106816d13a",
+  "config": {
+    "profile": "local",
+    "seed": 2221,
+    "storage_root": "storage",
+    "spark": {
+      "master": "local[8]",
+      "driver_memory": "12g",
+      "shuffle_partitions": 64,
+      "event_log_enabled": true
+    },
+    "mongo": {
+      "database": "amazon_recommender",
+      "uri_env": "MONGODB_URI"
+    },
+    "experiment": {
+      "purpose": "exploratory",
+      "user_fraction": 0.5,
+      "split": [
+        0.8,
+        0.1,
+        0.1
+      ],
+      "user_min_reviews": 5,
+      "item_min_reviews": 5,
+      "relevant_rating": 4.0
+    },
+    "model": {
+      "rank": 10,
+      "regularization": 0.1,
+      "iterations": 10,
+      "bias_regularization": 10.0,
+      "bias_max_passes": 10,
+      "bias_tolerance": 0.0001,
+      "popularity_smoothing": 10.0,
+      "popularity_window_days": "all",
+      "recommendation_count": 20,
+      "num_user_blocks": 10,
+      "num_item_blocks": 10
+    }
+  },
+  "etl_stage_sha256": "77975a4db2617b00d5ee0f182021adc48888a18e508e19db961d65403b9cd952",
+  "purpose": "exploratory",
+  "method": "pmod(xxhash64(cast(seed as bigint), user_id as string), 2^32) / 2^32 < user_fraction",
+  "seed": 2221,
+  "user_fraction": 0.5,
+  "dataset": {
+    "reviews": {
+      "path": "data/raw/Movies_and_TV.jsonl",
+      "bytes": 8391445499,
+      "sha256": "4eb7428d5f48baae5a7f1132ef556e6e98181b122085ac24b34b25e033c3130a"
+    },
+    "metadata": {
+      "path": "data/raw/meta_Movies_and_TV.jsonl",
+      "bytes": 1285744674,
+      "sha256": "beb82feef266bfa6d2e279903fd823a8b3b9c065059e1048226d0b74dc16b47d"
+    }
+  },
+  "users": {
+    "before": 6503429,
+    "after": 3251353,
+    "achieved_fraction": 0.4999444139391696
+  },
+  "interactions": {
+    "before": 17158519,
+    "after": 8571510
+  },
+  "resources": {
+    "master": "local[8]",
+    "driver_memory": "12g",
+    "shuffle_partitions": 64,
+    "spark_version": "3.5.6",
+    "java_version": "17.0.20.1",
+    "application_id": "local-1792952620574"
+  },
+  "timings_seconds": {
+    "spark_start": 1.776,
+    "count_before": 5.031,
+    "select_write": 4.387,
+    "count_after": 1.786,
+    "total": 14.144
+  },
+  "outputs": {
+    "interactions": "samples/fraction-0.5-seed-2221/interactions",
+    "metadata": "etl/metadata"
+  }
+}

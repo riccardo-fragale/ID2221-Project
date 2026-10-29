@@ -48,3 +48,6 @@ dist/
 
 report.tex
 
+# Sanitized run records behind the report: re-include models/ dirs and *.jsonl
+!/results/**/models/
+!/results/**/*.jsonl

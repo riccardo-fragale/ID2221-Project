@@ -1,0 +1,41 @@
+{
+  "stage": "publish",
+  "status": "completed",
+  "completed_at": "2026-10-26T15:29:31.146578+00:00",
+  "database": "amazon_recommender",
+  "version": "popularity_33f22baa8b00",
+  "collections": {
+    "recommendations": "recommendations_popularity_33f22baa8b00",
+    "items": "items_popularity_33f22baa8b00"
+  },
+  "source": "storage/runs/20261025T093611Z-2b4b605ead0f/samples/fraction-1-seed-2221/splits/refit-c0cb58f463fb-k5-5/serving/popularity-smoothing10-window_days180",
+  "source_stage_sha256": "2e943d0c0cf5699477db6c3eda420787149da767c72b88c92e6f2b94fd6c9943",
+  "documents_written": 6503429,
+  "item_documents": 30,
+  "validation": {
+    "user_documents": 6503429,
+    "sampled_documents_checked": 60,
+    "sampled_by_user_type": {
+      "known": 20,
+      "new": 20,
+      "removed_by_k_core": 20
+    },
+    "items": {
+      "sampled_items_checked": 20,
+      "items_without_details": 0
+    }
+  },
+  "resources": {
+    "master": "local[8]",
+    "driver_memory": "12g",
+    "shuffle_partitions": 64,
+    "spark_version": "3.5.6",
+    "java_version": "17.0.20.1",
+    "application_id": "local-1793028282552"
+  },
+  "timings_seconds": {
+    "write_recommendations": 254.457,
+    "write_items": 2.216,
+    "validate": 29.228
+  }
+}

@@ -1,0 +1,131 @@
+{
+  "stage": "train",
+  "status": "completed",
+  "completed_at": "2026-10-25T18:34:44.773609+00:00",
+  "run_id": "20261025T093611Z-2b4b605ead0f",
+  "sample": "fraction-1-seed-2221",
+  "split": "cutoffs-c0cb58f463fb-k5-5",
+  "split_stage_sha256": "9953afe406b12c53915b9f781e1e67f5f9c809fe786e04342ff2b5aa5d782cce",
+  "mappings": {
+    "users": {
+      "count": 536945,
+      "max_index": 536944,
+      "digest": "536945:-7727092029393899533089"
+    },
+    "items": {
+      "count": 153860,
+      "max_index": 153859,
+      "digest": "153860:957133933988009240257"
+    }
+  },
+  "purpose": "exploratory",
+  "model": {
+    "model": "als",
+    "params": {
+      "rank": 50,
+      "regularization": 0.03,
+      "iterations": 10,
+      "seed": 2221,
+      "user_blocks": 10,
+      "item_blocks": 10
+    },
+    "predicts_ratings": true,
+    "contract": {
+      "fitting_window": "training interactions only",
+      "candidate_universe": "items of the fitted training window",
+      "seen_item_policy": "items in the caller's seen pairs are never recommended",
+      "cold_start": "users or items without factors get no recommendations and no rating prediction (null)",
+      "ranking_score": "dot(user factors, item factors), exact over the whole catalog; ties by ascending item_index",
+      "approximate": false,
+      "rating_prediction": "dot(user factors, item factors), unclipped; explicit feedback, nonnegative=False"
+    },
+    "fit": {
+      "interactions": 5895362,
+      "global_mean": 4.275249594511753,
+      "users": 536945,
+      "items": 153860,
+      "implicit_prefs": false,
+      "nonnegative": false,
+      "factor_users": 536945,
+      "factor_items": 153860,
+      "input_partitions": 9,
+      "train_rmse": 0.14580341936994967
+    },
+    "provenance": {
+      "run_id": "20261025T093611Z-2b4b605ead0f",
+      "sample": "fraction-1-seed-2221",
+      "split": "cutoffs-c0cb58f463fb-k5-5",
+      "split_stage_sha256": "9953afe406b12c53915b9f781e1e67f5f9c809fe786e04342ff2b5aa5d782cce",
+      "mappings": {
+        "users": {
+          "count": 536945,
+          "max_index": 536944,
+          "digest": "536945:-7727092029393899533089"
+        },
+        "items": {
+          "count": 153860,
+          "max_index": 153859,
+          "digest": "153860:957133933988009240257"
+        }
+      }
+    }
+  },
+  "config": {
+    "profile": "local",
+    "seed": 2221,
+    "storage_root": "storage",
+    "spark": {
+      "master": "local[8]",
+      "driver_memory": "12g",
+      "shuffle_partitions": 64,
+      "event_log_enabled": true
+    },
+    "mongo": {
+      "database": "amazon_recommender",
+      "uri_env": "MONGODB_URI"
+    },
+    "experiment": {
+      "purpose": "exploratory",
+      "user_fraction": 0.2,
+      "split": [
+        0.8,
+        0.1,
+        0.1
+      ],
+      "user_min_reviews": 5,
+      "item_min_reviews": 5,
+      "relevant_rating": 4.0
+    },
+    "model": {
+      "rank": 50,
+      "regularization": 0.03,
+      "iterations": 10,
+      "bias_regularization": 10.0,
+      "bias_max_passes": 10,
+      "bias_tolerance": 0.0001,
+      "popularity_smoothing": 10.0,
+      "popularity_window_days": "all",
+      "recommendation_count": 20,
+      "num_user_blocks": 10,
+      "num_item_blocks": 10
+    }
+  },
+  "config_digest": "86eb37c273ac3a43735761cf8060f79e3000207ca821685d08e3a2fca4fc8163",
+  "resources": {
+    "master": "local[8]",
+    "driver_memory": "12g",
+    "shuffle_partitions": 64,
+    "spark_version": "3.5.6",
+    "java_version": "17.0.20.1",
+    "application_id": "local-1792953212169"
+  },
+  "timings_seconds": {
+    "spark_start": 1.995,
+    "fit": 69.298,
+    "save": 1.841,
+    "total": 74.281
+  },
+  "outputs": {
+    "model": "model"
+  }
+}

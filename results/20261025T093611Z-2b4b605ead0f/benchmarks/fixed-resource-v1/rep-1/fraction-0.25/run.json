@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "run_id": "20261025T093611Z-2b4b605ead0f",
+  "status": "prepared",
+  "created_at": "2026-10-25T09:36:11.493066+00:00",
+  "config_digest": "230126d2d54811c9bda2a9e101abbdd6732fa4d44eb1a9cff1e80c94ffb3bdc3",
+  "config": {
+    "profile": "local",
+    "seed": 2221,
+    "storage_root": "storage",
+    "spark": {
+      "master": "local[8]",
+      "driver_memory": "12g",
+      "shuffle_partitions": 64,
+      "event_log_enabled": true
+    },
+    "mongo": {
+      "database": "amazon_recommender",
+      "uri_env": "MONGODB_URI"
+    },
+    "experiment": {
+      "purpose": "exploratory",
+      "user_fraction": 0.2,
+      "split": [
+        0.8,
+        0.1,
+        0.1
+      ],
+      "user_min_reviews": 5,
+      "item_min_reviews": 5,
+      "relevant_rating": 4.0
+    },
+    "model": {
+      "rank": 10,
+      "regularization": 0.1,
+      "iterations": 10,
+      "bias_regularization": 10.0,
+      "bias_max_passes": 10,
+      "bias_tolerance": 0.0001,
+      "popularity_smoothing": 10.0,
+      "recommendation_count": 20,
+      "shortlist_size": 200,
+      "shortlist_cap": 1000
+    }
+  },
+  "inputs": {
+    "reviews": {
+      "path": "data/raw/Movies_and_TV.jsonl",
+      "bytes": 8391445499,
+      "sha256": "4eb7428d5f48baae5a7f1132ef556e6e98181b122085ac24b34b25e033c3130a"
+    },
+    "metadata": {
+      "path": "data/raw/meta_Movies_and_TV.jsonl",
+      "bytes": 1285744674,
+      "sha256": "beb82feef266bfa6d2e279903fd823a8b3b9c065059e1048226d0b74dc16b47d"
+    }
+  },
+  "code": {
+    "revision": "6b137551714b43d6973c670c91e9d1ce5b57fc84",
+    "dirty": true
+  },
+  "dependencies": {
+    "pyspark": "3.5.6",
+    "numpy": "1.26.4"
+  }
+}

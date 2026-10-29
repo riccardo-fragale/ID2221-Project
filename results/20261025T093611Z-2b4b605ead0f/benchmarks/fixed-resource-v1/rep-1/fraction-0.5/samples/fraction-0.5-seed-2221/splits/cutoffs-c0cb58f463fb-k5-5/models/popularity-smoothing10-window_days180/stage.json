@@ -1,0 +1,125 @@
+{
+  "stage": "train",
+  "status": "completed",
+  "completed_at": "2026-10-25T18:25:00.428435+00:00",
+  "run_id": "20261025T093611Z-2b4b605ead0f",
+  "sample": "fraction-0.5-seed-2221",
+  "split": "cutoffs-c0cb58f463fb-k5-5",
+  "split_stage_sha256": "eea0198b9e1a3a5b5e460f0833603cf17769a16cf1758f5c6a63c4b868aa6c43",
+  "mappings": {
+    "users": {
+      "count": 253361,
+      "max_index": 253360,
+      "digest": "253361:3676412808148695588762"
+    },
+    "items": {
+      "count": 97040,
+      "max_index": 97039,
+      "digest": "97040:1901411340367684432659"
+    }
+  },
+  "purpose": "exploratory",
+  "model": {
+    "model": "popularity",
+    "params": {
+      "smoothing": 10.0,
+      "window_days": 180
+    },
+    "predicts_ratings": true,
+    "contract": {
+      "fitting_window": "training interactions only; the ranking counts only the last window_days of them",
+      "candidate_universe": "items of the fitted training window",
+      "seen_item_policy": "items in the caller's seen pairs are never recommended",
+      "cold_start": "unknown users get the global popularity order; unknown items are never ranked and predict the training global mean",
+      "ranking_score": "interaction count in the last window_days of training; ties by ascending item_index",
+      "approximate": false,
+      "rating_prediction": "(item_rating_sum + smoothing * global_mean) / (item_count + smoothing) over all training rows, unclipped"
+    },
+    "fit": {
+      "interactions": 2719619,
+      "global_mean": 4.287772294575086,
+      "users": 253361,
+      "items": 97040,
+      "window_end_ms": 1545712662669,
+      "window_start_ms_exclusive": 1530160662669,
+      "window_interactions": 68731,
+      "window_items": 26288
+    },
+    "provenance": {
+      "run_id": "20261025T093611Z-2b4b605ead0f",
+      "sample": "fraction-0.5-seed-2221",
+      "split": "cutoffs-c0cb58f463fb-k5-5",
+      "split_stage_sha256": "eea0198b9e1a3a5b5e460f0833603cf17769a16cf1758f5c6a63c4b868aa6c43",
+      "mappings": {
+        "users": {
+          "count": 253361,
+          "max_index": 253360,
+          "digest": "253361:3676412808148695588762"
+        },
+        "items": {
+          "count": 97040,
+          "max_index": 97039,
+          "digest": "97040:1901411340367684432659"
+        }
+      }
+    }
+  },
+  "config": {
+    "profile": "local",
+    "seed": 2221,
+    "storage_root": "storage",
+    "spark": {
+      "master": "local[8]",
+      "driver_memory": "12g",
+      "shuffle_partitions": 64,
+      "event_log_enabled": true
+    },
+    "mongo": {
+      "database": "amazon_recommender",
+      "uri_env": "MONGODB_URI"
+    },
+    "experiment": {
+      "purpose": "exploratory",
+      "user_fraction": 0.2,
+      "split": [
+        0.8,
+        0.1,
+        0.1
+      ],
+      "user_min_reviews": 5,
+      "item_min_reviews": 5,
+      "relevant_rating": 4.0
+    },
+    "model": {
+      "rank": 10,
+      "regularization": 0.1,
+      "iterations": 10,
+      "bias_regularization": 10.0,
+      "bias_max_passes": 10,
+      "bias_tolerance": 0.0001,
+      "popularity_smoothing": 10.0,
+      "popularity_window_days": 180,
+      "recommendation_count": 20,
+      "num_user_blocks": 10,
+      "num_item_blocks": 10
+    }
+  },
+  "config_digest": "7520017bd2f7d1eda7a985e9cfc468c64853afe129994f6e436d6076c383c5cb",
+  "resources": {
+    "master": "local[8]",
+    "driver_memory": "12g",
+    "shuffle_partitions": 64,
+    "spark_version": "3.5.6",
+    "java_version": "17.0.20.1",
+    "application_id": "local-1792952695036"
+  },
+  "timings_seconds": {
+    "spark_start": 1.709,
+    "fit": 3.389,
+    "save": 0.515,
+    "total": 6.792
+  },
+  "outputs": {
+    "model": "model"
+  }
+}

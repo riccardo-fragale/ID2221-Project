@@ -1,0 +1,64 @@
+{
+  "stage": "etl",
+  "status": "completed",
+  "completed_at": "2026-10-25T09:43:37.971407+00:00",
+  "run_id": "20261025T093611Z-2b4b605ead0f",
+  "config_digest": "230126d2d54811c9bda2a9e101abbdd6732fa4d44eb1a9cff1e80c94ffb3bdc3",
+  "inputs": {
+    "reviews": {
+      "path": "data/raw/Movies_and_TV.jsonl",
+      "bytes": 8391445499,
+      "sha256": "4eb7428d5f48baae5a7f1132ef556e6e98181b122085ac24b34b25e033c3130a"
+    },
+    "metadata": {
+      "path": "data/raw/meta_Movies_and_TV.jsonl",
+      "bytes": 1285744674,
+      "sha256": "beb82feef266bfa6d2e279903fd823a8b3b9c065059e1048226d0b74dc16b47d"
+    }
+  },
+  "timestamp_bounds_ms": [
+    631152000000,
+    1893456000000
+  ],
+  "reviews": {
+    "rows_read": 17328314,
+    "rejected": {
+      "malformed_record": 0,
+      "missing_field": 0,
+      "invalid_rating": 0,
+      "invalid_timestamp": 0
+    },
+    "valid": 17328314,
+    "duplicates_removed": 169795,
+    "interactions": 17158519,
+    "users": 6503429,
+    "items": 747764,
+    "years": [
+      1997,
+      2023
+    ]
+  },
+  "metadata": {
+    "rows_read": 748224,
+    "items_with_metadata": 748224,
+    "interaction_items_without_title": 313873
+  },
+  "resources": {
+    "master": "local[8]",
+    "driver_memory": "12g",
+    "shuffle_partitions": 64,
+    "spark_version": "3.5.6",
+    "java_version": "17.0.20.1"
+  },
+  "timings_seconds": {
+    "reviews_classify_count": 7.219,
+    "reviews_deduplicate_write": 17.055,
+    "metadata_count_write": 3.047,
+    "verification_counts": 7.252,
+    "total": 37.529
+  },
+  "outputs": {
+    "interactions": "interactions",
+    "metadata": "metadata"
+  }
+}

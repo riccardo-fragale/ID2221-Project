@@ -1,0 +1,134 @@
+{
+  "stage": "evaluate",
+  "status": "completed",
+  "completed_at": "2026-10-25T16:54:00.836792+00:00",
+  "run_id": "20261025T093611Z-2b4b605ead0f",
+  "sample": "fraction-0.2-seed-2221",
+  "split": "p0.8-0.1-0.1-k5-5",
+  "window": "validation",
+  "view": {
+    "name": "validation",
+    "horizon_days": null,
+    "coverage": false,
+    "label": null
+  },
+  "purpose": "exploratory",
+  "model_label": "oracle-popularity",
+  "model": "oracle-popularity",
+  "reference_only": true,
+  "params": {},
+  "model_stage_sha256": null,
+  "approximate": false,
+  "metrics": {
+    "k": 10,
+    "relevant_rating": 4.0,
+    "catalog_items": 47491,
+    "cohort": {
+      "held_out_rows": 18524,
+      "held_out_users": 7239,
+      "eligible_users": 6123,
+      "users_without_relevant": 1116,
+      "relevant_pairs": 15216
+    },
+    "ranking": {
+      "precision_at_k": 0.004001306549077262,
+      "ndcg_at_k": 0.012153274683637558,
+      "recall_at_50": 0.0660831316896266,
+      "recall_at_100": 0.10019873203681687,
+      "hit_rate": 0.037726604605585495,
+      "users_with_hit": 231,
+      "hits": 245,
+      "short_lists": 0,
+      "short_lists_at_100": 0,
+      "precision_ci95": [
+        0.003511350645108607,
+        0.004556589906908378
+      ],
+      "ndcg_ci95": [
+        0.010368542139032736,
+        0.014011581410613367
+      ],
+      "bootstrap": {
+        "resamples": 2000,
+        "seed": 2221,
+        "unit": "user"
+      }
+    },
+    "random_reference": {
+      "note": "exact expectation of a uniformly random top-k over each user's unseen catalog; not a system",
+      "precision_at_k": 5.235435315015875e-05,
+      "ndcg_at_k": 0.00012138996313277034,
+      "recall_at_50": 0.0010532018529611057,
+      "recall_at_100": 0.0021064037059222115,
+      "expected_users_with_hit": 3.203206424413069
+    },
+    "signal_vs_random": {
+      "observed_users_with_hit": 231,
+      "expected_users_with_hit": 3.203206424413069,
+      "ratio": 72.11523997936744,
+      "p_value_one_sided": 0.0,
+      "log10_p_value_one_sided": -331.8483737224425,
+      "test": "users with a hit vs the random null, Poisson approximation of the Poisson-binomial (conservative for the upper tail: its variance sum p exceeds sum p(1-p))"
+    },
+    "segments": {
+      "<5": {
+        "users": 0
+      },
+      "5-9": {
+        "users": 3077,
+        "precision_at_k": 0.003444913877153064,
+        "ndcg_at_k": 0.01212179205876965,
+        "recall_at_50": 0.07168492605423307,
+        "recall_at_100": 0.11017879525693597,
+        "hit_rate": 0.03412414689632759,
+        "users_with_hit": 105,
+        "expected_users_with_hit_if_random": 1.3015965888280316,
+        "short_lists": 0,
+        "short_lists_at_100": 0,
+        "ratio_to_random": 80.67015610001165
+      },
+      "10-49": {
+        "users": 2737,
+        "precision_at_k": 0.00442089879430032,
+        "ndcg_at_k": 0.012638683398729906,
+        "recall_at_50": 0.06297967961851404,
+        "recall_at_100": 0.09265836003073746,
+        "hit_rate": 0.041286079649251003,
+        "users_with_hit": 113,
+        "expected_users_with_hit_if_random": 1.5639621367672794,
+        "short_lists": 0,
+        "short_lists_at_100": 0,
+        "ratio_to_random": 72.25238856074341
+      },
+      "50+": {
+        "users": 309,
+        "precision_at_k": 0.005825242718446603,
+        "ndcg_at_k": 0.008167217672345737,
+        "recall_at_50": 0.03779001537487371,
+        "recall_at_100": 0.06760761117057897,
+        "hit_rate": 0.042071197411003236,
+        "users_with_hit": 13,
+        "expected_users_with_hit_if_random": 0.33764769881774526,
+        "short_lists": 0,
+        "short_lists_at_100": 0,
+        "ratio_to_random": 38.50166918216467
+      }
+    },
+    "rating": null
+  },
+  "resources": {
+    "master": "local[8]",
+    "driver_memory": "12g",
+    "shuffle_partitions": 64,
+    "spark_version": "3.5.6",
+    "java_version": "17.0.20.1"
+  },
+  "timings_seconds": {
+    "evaluate": 7.254,
+    "per_user_write": 0.848,
+    "total": 12.175
+  },
+  "outputs": {
+    "per_user": "per_user"
+  }
+}

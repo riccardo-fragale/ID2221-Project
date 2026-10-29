@@ -1,0 +1,190 @@
+{
+  "stage": "select-grid",
+  "completed_at": "2026-10-25T17:00:00.772653+00:00",
+  "split": "p0.8-0.1-0.1-k5-5",
+  "sample": "fraction-0.2-seed-2221",
+  "model": "als",
+  "rule": "highest mean validation NDCG@10; ties: smaller rank, larger regularization, fewer iterations",
+  "rule_written": "before any ALS result was seen",
+  "users": 6123,
+  "chosen": "als-rank50-regularization0.03-iterations10-seed2221",
+  "mean_ndcg": {
+    "als-rank10-regularization0.03-iterations10-seed2221": 9.331636798067418e-05,
+    "als-rank10-regularization0.1-iterations10-seed2221": 0.00010801800397994035,
+    "als-rank10-regularization0.3-iterations10-seed2221": 0.00013133987479945543,
+    "als-rank25-regularization0.03-iterations10-seed2221": 0.0002848875241433189,
+    "als-rank25-regularization0.1-iterations10-seed2221": 0.0001539133890496427,
+    "als-rank25-regularization0.3-iterations10-seed2221": 6.845964163026069e-05,
+    "als-rank50-regularization0.03-iterations10-seed2221": 0.0003230435397609619,
+    "als-rank50-regularization0.1-iterations10-seed2221": 0.00019014567027780157,
+    "als-rank50-regularization0.3-iterations10-seed2221": 0.00013871259029717815
+  },
+  "difference_vs_chosen_ci95": {
+    "als-rank10-regularization0.03-iterations10-seed2221": [
+      -0.00048452066499142196,
+      3.947286603131029e-05
+    ],
+    "als-rank10-regularization0.1-iterations10-seed2221": [
+      -0.0004832209939949081,
+      3.75394077652549e-05
+    ],
+    "als-rank10-regularization0.3-iterations10-seed2221": [
+      -0.0004706906184579818,
+      7.606923605304856e-05
+    ],
+    "als-rank25-regularization0.03-iterations10-seed2221": [
+      -0.00034642042821542135,
+      0.00030272522131682543
+    ],
+    "als-rank25-regularization0.1-iterations10-seed2221": [
+      -0.0004312103065111649,
+      7.583974615533568e-05
+    ],
+    "als-rank25-regularization0.3-iterations10-seed2221": [
+      -0.0005026489944948221,
+      -2.8776005459182453e-05
+    ],
+    "als-rank50-regularization0.03-iterations10-seed2221": [
+      0.0,
+      0.0
+    ],
+    "als-rank50-regularization0.1-iterations10-seed2221": [
+      -0.0004263828900318077,
+      0.0001480859206626027
+    ],
+    "als-rank50-regularization0.3-iterations10-seed2221": [
+      -0.0004747020025267691,
+      0.00011550651654191715
+    ]
+  },
+  "params": {
+    "als-rank10-regularization0.03-iterations10-seed2221": {
+      "rank": 10,
+      "regularization": 0.03,
+      "iterations": 10,
+      "seed": 2221
+    },
+    "als-rank10-regularization0.1-iterations10-seed2221": {
+      "rank": 10,
+      "regularization": 0.1,
+      "iterations": 10,
+      "seed": 2221
+    },
+    "als-rank10-regularization0.3-iterations10-seed2221": {
+      "rank": 10,
+      "regularization": 0.3,
+      "iterations": 10,
+      "seed": 2221
+    },
+    "als-rank25-regularization0.03-iterations10-seed2221": {
+      "rank": 25,
+      "regularization": 0.03,
+      "iterations": 10,
+      "seed": 2221
+    },
+    "als-rank25-regularization0.1-iterations10-seed2221": {
+      "rank": 25,
+      "regularization": 0.1,
+      "iterations": 10,
+      "seed": 2221
+    },
+    "als-rank25-regularization0.3-iterations10-seed2221": {
+      "rank": 25,
+      "regularization": 0.3,
+      "iterations": 10,
+      "seed": 2221
+    },
+    "als-rank50-regularization0.03-iterations10-seed2221": {
+      "rank": 50,
+      "regularization": 0.03,
+      "iterations": 10,
+      "seed": 2221
+    },
+    "als-rank50-regularization0.1-iterations10-seed2221": {
+      "rank": 50,
+      "regularization": 0.1,
+      "iterations": 10,
+      "seed": 2221
+    },
+    "als-rank50-regularization0.3-iterations10-seed2221": {
+      "rank": 50,
+      "regularization": 0.3,
+      "iterations": 10,
+      "seed": 2221
+    }
+  },
+  "evaluations": {
+    "als-rank10-regularization0.03-iterations10-seed2221": {
+      "users_with_hit": 2,
+      "ndcg_ci95": [
+        0.0,
+        0.0002632746967685926
+      ],
+      "rmse": 2.0890369684808148
+    },
+    "als-rank10-regularization0.1-iterations10-seed2221": {
+      "users_with_hit": 4,
+      "ndcg_ci95": [
+        1.1339412369227054e-05,
+        0.0002864009207547374
+      ],
+      "rmse": 1.299235148620796
+    },
+    "als-rank10-regularization0.3-iterations10-seed2221": {
+      "users_with_hit": 4,
+      "ndcg_ci95": [
+        1.1339412369227054e-05,
+        0.0003216778446726681
+      ],
+      "rmse": 1.1845686133722344
+    },
+    "als-rank25-regularization0.03-iterations10-seed2221": {
+      "users_with_hit": 8,
+      "ndcg_ci95": [
+        7.469750418939285e-05,
+        0.0005692700116343352
+      ],
+      "rmse": 1.6181129404677408
+    },
+    "als-rank25-regularization0.1-iterations10-seed2221": {
+      "users_with_hit": 6,
+      "ndcg_ci95": [
+        3.340992970957077e-05,
+        0.0003021920441812001
+      ],
+      "rmse": 1.2260066827699685
+    },
+    "als-rank25-regularization0.3-iterations10-seed2221": {
+      "users_with_hit": 3,
+      "ndcg_ci95": [
+        0.0,
+        0.00015379440901013808
+      ],
+      "rmse": 1.1777798845081389
+    },
+    "als-rank50-regularization0.03-iterations10-seed2221": {
+      "users_with_hit": 12,
+      "ndcg_ci95": [
+        0.00012624209175779856,
+        0.0005596042566558337
+      ],
+      "rmse": 1.407727049663314
+    },
+    "als-rank50-regularization0.1-iterations10-seed2221": {
+      "users_with_hit": 5,
+      "ndcg_ci95": [
+        3.946147401584001e-05,
+        0.0004004595933592906
+      ],
+      "rmse": 1.2088558968423178
+    },
+    "als-rank50-regularization0.3-iterations10-seed2221": {
+      "users_with_hit": 2,
+      "ndcg_ci95": [
+        0.0,
+        0.0004121703436690887
+      ],
+      "rmse": 1.1802145913769002
+    }
+  }
+}

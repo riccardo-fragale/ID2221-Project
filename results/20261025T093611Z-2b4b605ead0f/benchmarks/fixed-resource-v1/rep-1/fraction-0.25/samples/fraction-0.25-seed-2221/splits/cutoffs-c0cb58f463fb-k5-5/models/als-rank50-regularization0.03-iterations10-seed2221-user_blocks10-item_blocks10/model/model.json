@@ -1,0 +1,51 @@
+{
+  "model": "als",
+  "params": {
+    "rank": 50,
+    "regularization": 0.03,
+    "iterations": 10,
+    "seed": 2221,
+    "user_blocks": 10,
+    "item_blocks": 10
+  },
+  "predicts_ratings": true,
+  "contract": {
+    "fitting_window": "training interactions only",
+    "candidate_universe": "items of the fitted training window",
+    "seen_item_policy": "items in the caller's seen pairs are never recommended",
+    "cold_start": "users or items without factors get no recommendations and no rating prediction (null)",
+    "ranking_score": "dot(user factors, item factors), exact over the whole catalog; ties by ascending item_index",
+    "approximate": false,
+    "rating_prediction": "dot(user factors, item factors), unclipped; explicit feedback, nonnegative=False"
+  },
+  "fit": {
+    "interactions": 1204219,
+    "global_mean": 4.295712822999803,
+    "users": 114908,
+    "items": 57407,
+    "implicit_prefs": false,
+    "nonnegative": false,
+    "factor_users": 114908,
+    "factor_items": 57407,
+    "input_partitions": 9,
+    "train_rmse": 0.09584458346796194
+  },
+  "provenance": {
+    "run_id": "20261025T093611Z-2b4b605ead0f",
+    "sample": "fraction-0.25-seed-2221",
+    "split": "cutoffs-c0cb58f463fb-k5-5",
+    "split_stage_sha256": "449b329fece8795d6411fee479276fd0e9ab87ff85ebdbb5006295629663161a",
+    "mappings": {
+      "users": {
+        "count": 114908,
+        "max_index": 114907,
+        "digest": "114908:-1583681083830686230029"
+      },
+      "items": {
+        "count": 57407,
+        "max_index": 57406,
+        "digest": "57407:336121225692875315329"
+      }
+    }
+  }
+}

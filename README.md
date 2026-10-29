@@ -19,13 +19,28 @@ This file only explains how to run the code.
 | `tests/` | unit, Spark, MongoDB and end-to-end tests, with small fixtures |
 | `compose.yaml`, `.env.example` | the MongoDB service and its credentials template |
 | `report/` | the 2-page report |
+| `results/` | the JSON/CSV records of the run behind the report (see below) |
 
 The pipeline writes all its output under `storage/runs/<run-id>/`, which is not included in the
 repository.
 
+## Reported run
+
+Every result in the report comes from run `20261025T093611Z-2b4b605ead0f`. Its Parquet data and
+models are not included, but `results/20261025T093611Z-2b4b605ead0f/` keeps all its JSON, JSONL,
+CSV and SVG records with the same layout as `storage/runs/<run-id>/`: run and stage manifests
+(configuration, input checksums, seeds, code revision, lineage), model selections, evaluation
+metrics, serving coverage and the scaling benchmark (`benchmarks/fixed-resource-v1/`). In this copy
+absolute paths are rewritten relative to the repository root and the host CPU model, kernel and
+total memory fields are removed. The `stage_sha256` and `*_stage_sha256` values were computed on
+the original, unedited files, so they do not verify against these copies.
+
+The run used `configs/real.toml` (Spark 3.5.6 `local[8]`, 12 GB driver, Java 17, Python 3.11) on a
+single Linux laptop with 16 logical CPUs and 32 GB of RAM.
+
 ## Requirements
 
-- Linux (macOS untested)
+- Linux (the only platform it was tested on)
 - Python 3.11 and [uv](https://docs.astral.sh/uv/)
 - Java 17 (Spark 3.5.6 does not run on newer default JDKs)
 - Docker with Compose v2, for MongoDB (only needed to publish and for the dashboard)

@@ -1,0 +1,141 @@
+{
+  "stage": "train",
+  "status": "completed",
+  "completed_at": "2026-10-25T17:01:34.457576+00:00",
+  "run_id": "20261025T093611Z-2b4b605ead0f",
+  "sample": "fraction-0.2-seed-2221",
+  "split": "p0.8-0.1-0.1-k5-5",
+  "split_stage_sha256": "e25cc1b03a4a8b195413f096bd653a52a43ea938a16b0f3d21c64878737405c6",
+  "mappings": {
+    "users": {
+      "count": 88251,
+      "max_index": 88250,
+      "digest": "88251:794047313216052203157"
+    },
+    "items": {
+      "count": 47491,
+      "max_index": 47490,
+      "digest": "47491:-582483419820938666137"
+    }
+  },
+  "purpose": "exploratory",
+  "model": {
+    "model": "bias-als",
+    "params": {
+      "rank": 10,
+      "regularization": 0.3,
+      "iterations": 10,
+      "seed": 2221,
+      "bias_regularization": 10.0,
+      "bias_max_passes": 10,
+      "bias_tolerance": 0.0001
+    },
+    "predicts_ratings": true,
+    "contract": {
+      "fitting_window": "training interactions only",
+      "candidate_universe": "items of the fitted training window",
+      "seen_item_policy": "items in the caller's seen pairs are never recommended",
+      "cold_start": "users or items without factors get no recommendations and no rating prediction (null)",
+      "ranking_score": "global_mean + user_bias + item_bias + dot(factors), unclipped, exact over the whole catalog; ties by ascending item_index",
+      "approximate": false,
+      "rating_prediction": "global_mean + user_bias + item_bias + dot(factors), unclipped"
+    },
+    "fit": {
+      "interactions": 912329,
+      "global_mean": 4.295708017612068,
+      "users": 88251,
+      "items": 47491,
+      "passes": 9,
+      "max_change_per_pass": [
+        2.2960656828110646,
+        0.4945574954158527,
+        0.06613103361114447,
+        0.013912752565827524,
+        0.00411711570789125,
+        0.0012549998639608817,
+        0.00039817830414884403,
+        0.00013602568833920303,
+        5.21521924450874e-05
+      ],
+      "converged": true,
+      "residual_mean": -0.0011529534782404596,
+      "residual_stddev": 0.873592863081591,
+      "implicit_prefs": false,
+      "nonnegative": false
+    },
+    "provenance": {
+      "run_id": "20261025T093611Z-2b4b605ead0f",
+      "sample": "fraction-0.2-seed-2221",
+      "split": "p0.8-0.1-0.1-k5-5",
+      "split_stage_sha256": "e25cc1b03a4a8b195413f096bd653a52a43ea938a16b0f3d21c64878737405c6",
+      "mappings": {
+        "users": {
+          "count": 88251,
+          "max_index": 88250,
+          "digest": "88251:794047313216052203157"
+        },
+        "items": {
+          "count": 47491,
+          "max_index": 47490,
+          "digest": "47491:-582483419820938666137"
+        }
+      }
+    }
+  },
+  "config": {
+    "profile": "local",
+    "seed": 2221,
+    "storage_root": "storage",
+    "spark": {
+      "master": "local[8]",
+      "driver_memory": "12g",
+      "shuffle_partitions": 64,
+      "event_log_enabled": true
+    },
+    "mongo": {
+      "database": "amazon_recommender",
+      "uri_env": "MONGODB_URI"
+    },
+    "experiment": {
+      "purpose": "exploratory",
+      "user_fraction": 0.2,
+      "split": [
+        0.8,
+        0.1,
+        0.1
+      ],
+      "user_min_reviews": 5,
+      "item_min_reviews": 5,
+      "relevant_rating": 4.0
+    },
+    "model": {
+      "rank": 10,
+      "regularization": 0.3,
+      "iterations": 10,
+      "bias_regularization": 10.0,
+      "bias_max_passes": 10,
+      "bias_tolerance": 0.0001,
+      "popularity_smoothing": 10.0,
+      "popularity_window_days": "all",
+      "recommendation_count": 20,
+      "shortlist_size": 200,
+      "shortlist_cap": 1000
+    }
+  },
+  "config_digest": "44194564a89183130de22ecce3585703973ba3f2b5170da01c8a7740580b7b70",
+  "resources": {
+    "master": "local[8]",
+    "driver_memory": "12g",
+    "shuffle_partitions": 64,
+    "spark_version": "3.5.6",
+    "java_version": "17.0.20.1"
+  },
+  "timings_seconds": {
+    "fit": 18.054,
+    "save": 0.761,
+    "total": 21.936
+  },
+  "outputs": {
+    "model": "model"
+  }
+}

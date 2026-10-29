@@ -1,0 +1,56 @@
+{
+  "model": "bias",
+  "params": {
+    "regularization": 10.0,
+    "max_passes": 10,
+    "tolerance": 0.0001
+  },
+  "predicts_ratings": true,
+  "contract": {
+    "fitting_window": "training interactions only",
+    "candidate_universe": "items of the fitted training window",
+    "seen_item_policy": "items in the caller's seen pairs are never recommended",
+    "cold_start": "missing user or item biases are zero: unknown users are ranked by item bias alone; unknown items are never ranked",
+    "ranking_score": "global_mean + user_bias + item_bias, unclipped; ties by ascending item_index",
+    "approximate": false,
+    "rating_prediction": "global_mean + user_bias + item_bias, unclipped"
+  },
+  "fit": {
+    "interactions": 5895362,
+    "global_mean": 4.275249594511753,
+    "users": 536945,
+    "items": 153860,
+    "passes": 10,
+    "max_change_per_pass": [
+      2.8756737378589188,
+      0.7341347234011855,
+      0.12647380091317317,
+      0.03775337237824605,
+      0.013941339527728913,
+      0.004880280693462136,
+      0.0017111036907882515,
+      0.0008554052266802059,
+      0.00041981271476898563,
+      0.00020438981102599563
+    ],
+    "converged": false
+  },
+  "provenance": {
+    "run_id": "20261025T093611Z-2b4b605ead0f",
+    "sample": "fraction-1-seed-2221",
+    "split": "cutoffs-c0cb58f463fb-k5-5",
+    "split_stage_sha256": "9953afe406b12c53915b9f781e1e67f5f9c809fe786e04342ff2b5aa5d782cce",
+    "mappings": {
+      "users": {
+        "count": 536945,
+        "max_index": 536944,
+        "digest": "536945:-7727092029393899533089"
+      },
+      "items": {
+        "count": 153860,
+        "max_index": 153859,
+        "digest": "153860:957133933988009240257"
+      }
+    }
+  }
+}

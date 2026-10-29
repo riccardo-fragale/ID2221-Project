@@ -1,0 +1,297 @@
+{
+  "stage": "materialize",
+  "status": "completed",
+  "completed_at": "2026-10-26T10:01:18.168657+00:00",
+  "run_id": "20261025T093611Z-2b4b605ead0f",
+  "sample": "fraction-1-seed-2221",
+  "split": "refit-c0cb58f463fb-k5-5",
+  "split_stage_sha256": "e98c9774375862e216c392fb56e9190c473e52056f05ff179aadaab63a9f24a4",
+  "model_label": "popularity-smoothing10-window_days180",
+  "model": "popularity",
+  "fallback_label": "popularity-smoothing10-window_days180",
+  "contracts": {
+    "model": {
+      "fitting_window": "training interactions only; the ranking counts only the last window_days of them",
+      "candidate_universe": "items of the fitted training window",
+      "seen_item_policy": "items in the caller's seen pairs are never recommended",
+      "cold_start": "unknown users get the global popularity order; unknown items are never ranked and predict the training global mean",
+      "ranking_score": "interaction count in the last window_days of training; ties by ascending item_index",
+      "approximate": false,
+      "rating_prediction": "(item_rating_sum + smoothing * global_mean) / (item_count + smoothing) over all training rows, unclipped"
+    },
+    "fallback": {
+      "fitting_window": "training interactions only; the ranking counts only the last window_days of them",
+      "candidate_universe": "items of the fitted training window",
+      "seen_item_policy": "items in the caller's seen pairs are never recommended",
+      "cold_start": "unknown users get the global popularity order; unknown items are never ranked and predict the training global mean",
+      "ranking_score": "interaction count in the last window_days of training; ties by ascending item_index",
+      "approximate": false,
+      "rating_prediction": "(item_rating_sum + smoothing * global_mean) / (item_count + smoothing) over all training rows, unclipped"
+    }
+  },
+  "k": 20,
+  "train_cutoff_utc": "2020-11-17T07:13:20.963000+00:00",
+  "policy": {
+    "population": "every user of the sample (all windows)",
+    "seen": "interactions up to the train cutoff, before the k-core",
+    "model_users": "known users (split mapping) with a model list",
+    "fallback_users": "removed_by_k_core and new users, and known users without a model list"
+  },
+  "counts": {
+    "users": 6503429,
+    "sample_users": 6503429
+  },
+  "coverage": {
+    "users": 6503429,
+    "rows": 130068580,
+    "users_by_type": {
+      "known": 598310,
+      "removed_by_k_core": 5257666,
+      "new": 647453
+    },
+    "users_by_rec_type": {
+      "model": 598310,
+      "fallback": 5905119
+    },
+    "users_by_type_and_rec_type": {
+      "known/model": 598310,
+      "new/fallback": 647453,
+      "removed_by_k_core/fallback": 5257666
+    },
+    "short_lists": {
+      "count": 0,
+      "empty": 0,
+      "reason": "catalog_exhausted: every list has min(k, unseen catalog items) entries"
+    },
+    "checks": {
+      "duplicate_users": 0,
+      "lengths_not_min_k_unseen": 0,
+      "rows_not_matching_lengths": 0,
+      "malformed_lists": 0,
+      "missing_or_nan_scores": 0,
+      "scores_increasing_with_rank": 0,
+      "seen_items_recommended": 0,
+      "rows_of_unlisted_users": 0
+    }
+  },
+  "batches": {
+    "batch_users": 500000,
+    "count": 14,
+    "reused_on_resume": 0,
+    "records": [
+      {
+        "batch": 0,
+        "users": 500000,
+        "rows": 10000000,
+        "fallback_users": 0,
+        "completed_at": "2026-10-26T09:57:01.053978+00:00",
+        "timings_seconds": {
+          "recommend_write": 14.065,
+          "total": 14.841
+        }
+      },
+      {
+        "batch": 1,
+        "users": 500000,
+        "rows": 10000000,
+        "fallback_users": 401690,
+        "completed_at": "2026-10-26T09:57:15.279998+00:00",
+        "timings_seconds": {
+          "recommend_write": 13.56,
+          "total": 14.226
+        }
+      },
+      {
+        "batch": 2,
+        "users": 500000,
+        "rows": 10000000,
+        "fallback_users": 500000,
+        "completed_at": "2026-10-26T09:57:27.069707+00:00",
+        "timings_seconds": {
+          "recommend_write": 11.364,
+          "total": 11.789
+        }
+      },
+      {
+        "batch": 3,
+        "users": 500000,
+        "rows": 10000000,
+        "fallback_users": 500000,
+        "completed_at": "2026-10-26T09:57:39.103799+00:00",
+        "timings_seconds": {
+          "recommend_write": 11.601,
+          "total": 12.034
+        }
+      },
+      {
+        "batch": 4,
+        "users": 500000,
+        "rows": 10000000,
+        "fallback_users": 500000,
+        "completed_at": "2026-10-26T09:57:50.795407+00:00",
+        "timings_seconds": {
+          "recommend_write": 11.329,
+          "total": 11.691
+        }
+      },
+      {
+        "batch": 5,
+        "users": 500000,
+        "rows": 10000000,
+        "fallback_users": 500000,
+        "completed_at": "2026-10-26T09:58:00.509603+00:00",
+        "timings_seconds": {
+          "recommend_write": 9.39,
+          "total": 9.714
+        }
+      },
+      {
+        "batch": 6,
+        "users": 500000,
+        "rows": 10000000,
+        "fallback_users": 500000,
+        "completed_at": "2026-10-26T09:58:10.193083+00:00",
+        "timings_seconds": {
+          "recommend_write": 9.4,
+          "total": 9.683
+        }
+      },
+      {
+        "batch": 7,
+        "users": 500000,
+        "rows": 10000000,
+        "fallback_users": 500000,
+        "completed_at": "2026-10-26T09:58:20.062054+00:00",
+        "timings_seconds": {
+          "recommend_write": 9.545,
+          "total": 9.869
+        }
+      },
+      {
+        "batch": 8,
+        "users": 500000,
+        "rows": 10000000,
+        "fallback_users": 500000,
+        "completed_at": "2026-10-26T09:58:29.777501+00:00",
+        "timings_seconds": {
+          "recommend_write": 9.411,
+          "total": 9.715
+        }
+      },
+      {
+        "batch": 9,
+        "users": 500000,
+        "rows": 10000000,
+        "fallback_users": 500000,
+        "completed_at": "2026-10-26T09:58:39.562070+00:00",
+        "timings_seconds": {
+          "recommend_write": 9.467,
+          "total": 9.784
+        }
+      },
+      {
+        "batch": 10,
+        "users": 500000,
+        "rows": 10000000,
+        "fallback_users": 500000,
+        "completed_at": "2026-10-26T09:58:49.304150+00:00",
+        "timings_seconds": {
+          "recommend_write": 9.472,
+          "total": 9.742
+        }
+      },
+      {
+        "batch": 11,
+        "users": 500000,
+        "rows": 10000000,
+        "fallback_users": 500000,
+        "completed_at": "2026-10-26T09:58:58.607175+00:00",
+        "timings_seconds": {
+          "recommend_write": 9.061,
+          "total": 9.303
+        }
+      },
+      {
+        "batch": 12,
+        "users": 500000,
+        "rows": 10000000,
+        "fallback_users": 500000,
+        "completed_at": "2026-10-26T09:59:08.295639+00:00",
+        "timings_seconds": {
+          "recommend_write": 9.444,
+          "total": 9.688
+        }
+      },
+      {
+        "batch": 13,
+        "users": 3429,
+        "rows": 68580,
+        "fallback_users": 3429,
+        "completed_at": "2026-10-26T09:59:09.774086+00:00",
+        "timings_seconds": {
+          "recommend_write": 1.253,
+          "total": 1.478
+        }
+      }
+    ]
+  },
+  "config": {
+    "profile": "local",
+    "seed": 2221,
+    "storage_root": "storage",
+    "spark": {
+      "master": "local[8]",
+      "driver_memory": "12g",
+      "shuffle_partitions": 64,
+      "event_log_enabled": true
+    },
+    "mongo": {
+      "database": "amazon_recommender",
+      "uri_env": "MONGODB_URI"
+    },
+    "experiment": {
+      "purpose": "exploratory",
+      "user_fraction": 0.2,
+      "split": [
+        0.8,
+        0.1,
+        0.1
+      ],
+      "user_min_reviews": 5,
+      "item_min_reviews": 5,
+      "relevant_rating": 4.0
+    },
+    "model": {
+      "rank": 10,
+      "regularization": 0.1,
+      "iterations": 10,
+      "bias_regularization": 10.0,
+      "bias_max_passes": 10,
+      "bias_tolerance": 0.0001,
+      "popularity_smoothing": 10.0,
+      "popularity_window_days": "all",
+      "recommendation_count": 20,
+      "num_user_blocks": 10,
+      "num_item_blocks": 10
+    }
+  },
+  "config_digest": "e26987ab357ae7fce389786a8dd448627478a4483ef92bb9dd439e9ddcd6412a",
+  "resources": {
+    "master": "local[8]",
+    "driver_memory": "12g",
+    "shuffle_partitions": 64,
+    "spark_version": "3.5.6",
+    "java_version": "17.0.20.1",
+    "application_id": "local-1793008571408"
+  },
+  "timings_seconds": {
+    "spark_start": 1.753,
+    "serving_users": 32.866,
+    "audit": 128.386,
+    "total": 308.165
+  },
+  "outputs": {
+    "users": "users",
+    "recommendations": "recommendations"
+  }
+}

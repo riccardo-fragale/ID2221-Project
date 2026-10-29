@@ -1,0 +1,45 @@
+{
+  "model": "popularity",
+  "params": {
+    "smoothing": 10.0,
+    "window_days": 180
+  },
+  "predicts_ratings": true,
+  "contract": {
+    "fitting_window": "training interactions only; the ranking counts only the last window_days of them",
+    "candidate_universe": "items of the fitted training window",
+    "seen_item_policy": "items in the caller's seen pairs are never recommended",
+    "cold_start": "unknown users get the global popularity order; unknown items are never ranked and predict the training global mean",
+    "ranking_score": "interaction count in the last window_days of training; ties by ascending item_index",
+    "approximate": false,
+    "rating_prediction": "(item_rating_sum + smoothing * global_mean) / (item_count + smoothing) over all training rows, unclipped"
+  },
+  "fit": {
+    "interactions": 1204219,
+    "global_mean": 4.295712822999803,
+    "users": 114908,
+    "items": 57407,
+    "window_end_ms": 1545712662669,
+    "window_start_ms_exclusive": 1530160662669,
+    "window_interactions": 27706,
+    "window_items": 12738
+  },
+  "provenance": {
+    "run_id": "20261025T093611Z-2b4b605ead0f",
+    "sample": "fraction-0.25-seed-2221",
+    "split": "cutoffs-c0cb58f463fb-k5-5",
+    "split_stage_sha256": "7ecfff6bd2c45a0a269a7b974c6ba4cb61e4b8e3b35a1fc6e8e97962c446628f",
+    "mappings": {
+      "users": {
+        "count": 114908,
+        "max_index": 114907,
+        "digest": "114908:-1583681083830686230029"
+      },
+      "items": {
+        "count": 57407,
+        "max_index": 57406,
+        "digest": "57407:336121225692875315329"
+      }
+    }
+  }
+}

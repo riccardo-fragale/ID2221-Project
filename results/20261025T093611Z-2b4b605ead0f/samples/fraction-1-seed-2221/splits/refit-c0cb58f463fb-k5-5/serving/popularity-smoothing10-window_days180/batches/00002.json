@@ -1,0 +1,11 @@
+{
+  "batch": 2,
+  "users": 500000,
+  "rows": 10000000,
+  "fallback_users": 500000,
+  "completed_at": "2026-10-26T09:57:27.069707+00:00",
+  "timings_seconds": {
+    "recommend_write": 11.364,
+    "total": 11.789
+  }
+}

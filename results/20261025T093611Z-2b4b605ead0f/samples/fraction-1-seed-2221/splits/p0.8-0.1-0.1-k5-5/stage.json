@@ -1,0 +1,181 @@
+{
+  "stage": "split",
+  "status": "completed",
+  "completed_at": "2026-10-25T10:43:16.017001+00:00",
+  "run_id": "20261025T093611Z-2b4b605ead0f",
+  "sample": "fraction-1-seed-2221",
+  "sample_stage_sha256": "43c62dbc47d92f1249bdd3858fc04ea904ccb71bc31d6c235202ab4ab0a7b35b",
+  "purpose": "exploratory",
+  "policy": {
+    "method": "global chronological split by interaction count; equal timestamps share a window",
+    "split": [
+      0.8,
+      0.1,
+      0.1
+    ],
+    "cutoffs_from": null,
+    "user_min_reviews": 5,
+    "item_min_reviews": 5
+  },
+  "cutoffs_ms": {
+    "train": 1545712662669,
+    "validation": 1605597200963
+  },
+  "cutoffs_utc": {
+    "train": "2018-12-25T04:37:42.669000+00:00",
+    "validation": "2020-11-17T07:13:20.963000+00:00"
+  },
+  "before_filtering": {
+    "interactions": {
+      "train": 13726816,
+      "validation": 1715852,
+      "test": 1715851
+    },
+    "proportions": {
+      "train": 0.8000000466240705,
+      "validation": 0.10000000582800882,
+      "test": 0.09999994754792066
+    }
+  },
+  "k_core": {
+    "iterations": [
+      {
+        "users_removed": 4636587,
+        "items_removed": 355700,
+        "interactions_removed": 7467844
+      },
+      {
+        "users_removed": 27164,
+        "items_removed": 60701,
+        "interactions_removed": 263700
+      },
+      {
+        "users_removed": 17201,
+        "items_removed": 3381,
+        "interactions_removed": 78708
+      },
+      {
+        "users_removed": 1298,
+        "items_removed": 2384,
+        "interactions_removed": 14441
+      },
+      {
+        "users_removed": 1031,
+        "items_removed": 218,
+        "interactions_removed": 4941
+      },
+      {
+        "users_removed": 83,
+        "items_removed": 189,
+        "interactions_removed": 1080
+      },
+      {
+        "users_removed": 98,
+        "items_removed": 18,
+        "interactions_removed": 460
+      },
+      {
+        "users_removed": 8,
+        "items_removed": 35,
+        "interactions_removed": 172
+      },
+      {
+        "users_removed": 10,
+        "items_removed": 3,
+        "interactions_removed": 52
+      },
+      {
+        "users_removed": 2,
+        "items_removed": 4,
+        "interactions_removed": 24
+      },
+      {
+        "users_removed": 5,
+        "items_removed": 0,
+        "interactions_removed": 20
+      },
+      {
+        "users_removed": 0,
+        "items_removed": 2,
+        "interactions_removed": 8
+      },
+      {
+        "users_removed": 1,
+        "items_removed": 0,
+        "interactions_removed": 4
+      }
+    ],
+    "converged_after": 13,
+    "retained_interactions": 5895362,
+    "retained_fraction": 0.42947774633243424
+  },
+  "projection": {
+    "validation": {
+      "rows": 1715852,
+      "kept": 173119,
+      "unknown_user_only": 690068,
+      "unknown_item_only": 173812,
+      "unknown_user_and_item": 678853,
+      "users_without_training_history": 635257,
+      "users_removed_by_k_core": 234644,
+      "items_without_training_history": 78848,
+      "items_removed_by_k_core": 69000
+    },
+    "test": {
+      "rows": 1715851,
+      "kept": 85192,
+      "unknown_user_only": 476377,
+      "unknown_item_only": 161751,
+      "unknown_user_and_item": 992531,
+      "users_without_training_history": 721849,
+      "users_removed_by_k_core": 190017,
+      "items_without_training_history": 122177,
+      "items_removed_by_k_core": 52408
+    }
+  },
+  "mappings": {
+    "users": {
+      "count": 536945,
+      "max_index": 536944,
+      "digest": "536945:-7727092029393899533089"
+    },
+    "items": {
+      "count": 153860,
+      "max_index": 153859,
+      "digest": "153860:957133933988009240257"
+    }
+  },
+  "interactions": {
+    "train": 5895362,
+    "validation": 173119,
+    "test": 85192
+  },
+  "proportions": {
+    "train": 0.9580232813800799,
+    "validation": 0.02813262908185079,
+    "test": 0.013844089538069378
+  },
+  "resources": {
+    "master": "local[8]",
+    "driver_memory": "12g",
+    "shuffle_partitions": 64,
+    "spark_version": "3.5.6",
+    "java_version": "17.0.20.1"
+  },
+  "timings_seconds": {
+    "cutoffs": 8.828,
+    "window_counts": 0.584,
+    "k_core": 79.414,
+    "mappings_write": 3.521,
+    "windows_write": 15.63,
+    "verification_counts": 0.211,
+    "total": 110.798
+  },
+  "outputs": {
+    "train": "train",
+    "validation": "validation",
+    "test": "test",
+    "users": "users",
+    "items": "items"
+  }
+}

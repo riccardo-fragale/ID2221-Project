@@ -1,0 +1,168 @@
+{
+  "stage": "split",
+  "status": "completed",
+  "completed_at": "2026-10-25T18:24:52.632600+00:00",
+  "run_id": "20261025T093611Z-2b4b605ead0f",
+  "sample": "fraction-0.5-seed-2221",
+  "sample_stage_sha256": "9f495c5838eedc64e568a885b3ca68eab8507a9c79f283d10e9c3684ea18307e",
+  "purpose": "exploratory",
+  "policy": {
+    "method": "global chronological split by interaction count; equal timestamps share a window",
+    "split": null,
+    "cutoffs_from": {
+      "path": "storage/runs/20261025T093611Z-2b4b605ead0f/samples/fraction-1-seed-2221/splits/p0.8-0.1-0.1-k5-5/stage.json",
+      "sha256": "c0cb58f463fb07b5d52ac95c468f6deccda2c12e36b3ae3da1ef624c33c31d9d"
+    },
+    "refit_from": null,
+    "user_min_reviews": 5,
+    "item_min_reviews": 5
+  },
+  "cutoffs_ms": {
+    "train": 1545712662669,
+    "validation": 1605597200963
+  },
+  "cutoffs_utc": {
+    "train": "2018-12-25T04:37:42.669000+00:00",
+    "validation": "2020-11-17T07:13:20.963000+00:00"
+  },
+  "before_filtering": {
+    "interactions": {
+      "train": 6855790,
+      "validation": 856840,
+      "test": 858880
+    },
+    "proportions": {
+      "train": 0.7998345682382684,
+      "validation": 0.09996371701135506,
+      "test": 0.10020171475037654
+    }
+  },
+  "k_core": {
+    "iterations": [
+      {
+        "users_removed": 2318666,
+        "items_removed": 301010,
+        "interactions_removed": 3849282
+      },
+      {
+        "users_removed": 22762,
+        "items_removed": 46032,
+        "interactions_removed": 204078
+      },
+      {
+        "users_removed": 13103,
+        "items_removed": 3515,
+        "interactions_removed": 62701
+      },
+      {
+        "users_removed": 1264,
+        "items_removed": 2174,
+        "interactions_removed": 13418
+      },
+      {
+        "users_removed": 897,
+        "items_removed": 261,
+        "interactions_removed": 4587
+      },
+      {
+        "users_removed": 132,
+        "items_removed": 209,
+        "interactions_removed": 1359
+      },
+      {
+        "users_removed": 103,
+        "items_removed": 27,
+        "interactions_removed": 520
+      },
+      {
+        "users_removed": 13,
+        "items_removed": 30,
+        "interactions_removed": 170
+      },
+      {
+        "users_removed": 11,
+        "items_removed": 1,
+        "interactions_removed": 48
+      },
+      {
+        "users_removed": 2,
+        "items_removed": 0,
+        "interactions_removed": 8
+      }
+    ],
+    "converged_after": 10,
+    "retained_interactions": 2719619,
+    "retained_fraction": 0.3966893676731639
+  },
+  "projection": {
+    "validation": {
+      "rows": 856840,
+      "kept": 71781,
+      "unknown_user_only": 304180,
+      "unknown_item_only": 94234,
+      "unknown_user_and_item": 386645,
+      "users_without_training_history": 317174,
+      "users_removed_by_k_core": 119809,
+      "items_without_training_history": 62049,
+      "items_removed_by_k_core": 54668
+    },
+    "test": {
+      "rows": 858880,
+      "kept": 35254,
+      "unknown_user_only": 209813,
+      "unknown_item_only": 81979,
+      "unknown_user_and_item": 531834,
+      "users_without_training_history": 360612,
+      "users_removed_by_k_core": 96999,
+      "items_without_training_history": 91617,
+      "items_removed_by_k_core": 41739
+    }
+  },
+  "mappings": {
+    "users": {
+      "count": 253361,
+      "max_index": 253360,
+      "digest": "253361:3676412808148695588762"
+    },
+    "items": {
+      "count": 97040,
+      "max_index": 97039,
+      "digest": "97040:1901411340367684432659"
+    }
+  },
+  "interactions": {
+    "train": 2719619,
+    "validation": 71781,
+    "test": 35254
+  },
+  "proportions": {
+    "train": 0.9621336746556176,
+    "validation": 0.02539433549348452,
+    "test": 0.012471989850897917
+  },
+  "resources": {
+    "master": "local[8]",
+    "driver_memory": "12g",
+    "shuffle_partitions": 64,
+    "spark_version": "3.5.6",
+    "java_version": "17.0.20.1",
+    "application_id": "local-1792952636035"
+  },
+  "timings_seconds": {
+    "spark_start": 1.862,
+    "cutoffs": 0.0,
+    "window_counts": 1.582,
+    "k_core": 39.601,
+    "mappings_write": 2.688,
+    "windows_write": 10.961,
+    "verification_counts": 0.203,
+    "total": 58.105
+  },
+  "outputs": {
+    "train": "train",
+    "validation": "validation",
+    "test": "test",
+    "users": "users",
+    "items": "items"
+  }
+}

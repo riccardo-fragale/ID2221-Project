@@ -1,0 +1,12 @@
+{
+  "model_label": "popularity-smoothing10-window_days180",
+  "fallback_label": "popularity-smoothing10-window_days180",
+  "k": 20,
+  "batch_users": 500000,
+  "split_stage_sha256": "e98c9774375862e216c392fb56e9190c473e52056f05ff179aadaab63a9f24a4",
+  "sample_stage_sha256": "43c62dbc47d92f1249bdd3858fc04ea904ccb71bc31d6c235202ab4ab0a7b35b",
+  "model_stage_sha256": {
+    "model": "3771b81190db0102d1dc42e7d9cbc04a29c8a21b0d94f1e51dd295a98c144e7d",
+    "fallback": "3771b81190db0102d1dc42e7d9cbc04a29c8a21b0d94f1e51dd295a98c144e7d"
+  }
+}
